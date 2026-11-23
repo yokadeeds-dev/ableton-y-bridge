@@ -65,6 +65,70 @@ def _spectral_findings(bands: dict) -> list:
     return findings
 
 
+
+def _master_y_meter():
+    """Frame of a Y Meter device on the master track (Live 12 calls it 'Main')."""
+    measured = analyzer.tracks()
+    return measured.get("Main") or measured.get("Master")
+
+
+BAND_FLOOR_DB = -90.0  # quieter bands are shown as silent
+
+
+def _db(value) -> str:
+    return "silent" if value is None else f"{value:6.1f} dB"
+
+
+@tool(READ)
+def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True) -> str:
+    """Levels of all tracks side by side while the song plays.
+
+    Samples Live's output meters of every track, return track and the master
+    for a few seconds (five to ten readings a second) and lists the highest and
+    the average reading per track in approximate dBFS (post-fader, about
+    +-2 dB; calibrated against Live's meter scale). Good for comparing tracks
+    and spotting tracks that go over 0 dB; not a loudness measurement. Tracks
+    that carry the "Y Meter" Max for Live device also show RMS, peak and the
+    five-band spectrum measured where the device sits (usually pre-fader).
+    Start playback first; silent or stopped tracks read "silent".
+
+    - seconds: sampling window in seconds, 0 to 10 (default 2)
+    - include_returns: also list the return tracks (default true)
+    """
+    window = to_float(seconds, "seconds")
+    if not 0.0 <= window <= 10.0:
+        raise ValueError("seconds must be between 0 and 10")
+    result = live.call("get_track_meters", seconds=window,
+                       include_returns=to_bool(include_returns, "include_returns"))
+    measured = analyzer.tracks()
+    rows = [f"Track levels over {result['seconds']:.1f} s ({result['samples']} readings, "
+            f"{'playing' if result.get('playing') else 'transport stopped'})",
+            "Live meter, post-fader: highest / average reading (approx. dBFS, +-2 dB)", ""]
+    labels = {"track": lambda r: f"{r['index']:>3}", "return": lambda r: f"R{r['index']:<2}",
+              "master": lambda r: "  M"}
+    for row in result["tracks"]:
+        head = f"{labels[row['kind']](row)}  {row['name'][:28]:<28}"
+        if not row.get("audio_output"):
+            rows.append(f"{head}  (no audio output)")
+            continue
+        line = f"{head}  {_db(row.get('peak_db'))} / {_db(row.get('mean_db'))}"
+        if row.get("over_0db"):
+            line += f"  over 0 dB in {row['over_0db']} readings"
+        rows.append(line)
+        frame = measured.get(row["name"])
+        if frame:
+            bands = "  ".join(f"{band} {frame['bands'][band]:.0f}" for band in BAND_ORDER
+                              if frame["bands"].get(band, -999.0) > BAND_FLOOR_DB)
+            rows.append(f"       Y Meter: RMS {frame['rms_db']:.1f} dB, peak "
+                        f"{frame['peak_db']:.1f} dBFS" + (f" | {bands} dB" if bands else ""))
+    if not result.get("playing"):
+        rows += ["", "The transport was stopped: start playback and call again."]
+    if not measured:
+        rows += ["", "Spectrum per track: put the \"Y Meter\" Max for Live device on the "
+                     "tracks you want to look at (see m4l/README.md)."]
+    return "\n".join(rows)
+
+
 @tool(READ)
 def get_master_analysis() -> str:
     """Current level of the master track, plus the spectrum if an analyzer runs.
@@ -82,7 +146,7 @@ def get_master_analysis() -> str:
         f"  meter L/R: {meter['meter_left']:.4f} / {meter['meter_right']:.4f}",
         f"  transport: {'playing' if meter.get('is_playing') else 'stopped'}",
     ]
-    frame = analyzer.fresh()
+    frame = analyzer.fresh() or _master_y_meter()
     if frame is None:
         rows += ["", "Analyzer: no signal (start analyzer/audio_analyzer.py or the "
                      "Max for Live analyzer to get loudness and spectrum)."]

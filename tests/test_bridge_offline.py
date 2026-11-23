@@ -405,7 +405,7 @@ class ToolTests(BridgeCase):
         return text
 
     def test_tool_count(self):
-        self.assertEqual(len(core.TOOLS), 79)
+        self.assertEqual(len(core.TOOLS), 80)
 
     def test_session_tools(self):
         self.ok(session.get_session_info())
@@ -511,6 +511,77 @@ class ToolTests(BridgeCase):
         self.ok(mastering.color_all_tracks_by_spectrum(dry_run=True))
         with core.analyzer._lock:
             core.analyzer._frame = {}
+
+    def test_track_meters_sample_every_track(self):
+        result = self.call("get_track_meters", seconds=0.3)
+        self.assertTrue(1 <= result["samples"] <= 6, result["samples"])
+        kinds = [row["kind"] for row in result["tracks"]]
+        self.assertEqual(kinds.count("track"), len(SONG.tracks))
+        self.assertEqual(kinds.count("return"), len(SONG.return_tracks))
+        self.assertEqual(kinds[-1], "master")
+        first = result["tracks"][0]
+        self.assertEqual(first["meter_peak"], 0.5)  # max of the fake meters 0.5 / 0.25
+        self.assertEqual(first["meter_mean"], 0.5)
+        self.assertEqual(first["peak_db"], -31.3)  # calibration: (0.5 - 0.9043) / 0.01292
+        without = self.call("get_track_meters", seconds=0, include_returns=False)
+        self.assertNotIn("return", [row["kind"] for row in without["tracks"]])
+
+    def test_track_levels_with_y_meter_frame(self):
+        name = SONG.tracks[0].name
+        core.analyzer.accept(_osc("/ytrack", name, 0.1, 0.5, 0.05, 0.02, 0.01, 0.005, 0.0))
+        text = self.ok(mastering.get_track_levels(0.2))
+        self.assertIn("Y Meter: RMS -20.0 dB, peak -6.0 dBFS", text)
+        self.assertIn("sub -26", text)
+        self.assertNotIn("air", text.split("Y Meter")[1].split("\n")[0])  # silent band left out
+        with core.analyzer._lock:
+            core.analyzer._tracks.clear()
+        self.assertIn("put the \"Y Meter\"", self.ok(mastering.get_track_levels(0)))
+        self.assertTrue(mastering.get_track_levels(11).startswith("Error"))
+
+
+def _osc(address, *values):
+    """Encode one OSC message the way Max's udpsend does."""
+    import struct
+
+    def pad(raw):
+        raw += b"\0"
+        return raw + b"\0" * (-len(raw) % 4)
+
+    tags, body = ",", b""
+    for value in values:
+        if isinstance(value, str):
+            tags += "s"
+            body += pad(value.encode("utf-8"))
+        else:
+            tags += "f"
+            body += struct.pack(">f", value)
+    return pad(address.encode("utf-8")) + pad(tags.encode("ascii")) + body
+
+
+class AnalyzerFeedTests(unittest.TestCase):
+    def test_json_master_frame(self):
+        from MCP_Server.analyzer_feed import AnalyzerFeed
+        feed = AnalyzerFeed(port=1)
+        feed.accept(json.dumps({"rms_db": -20.0}).encode("utf-8"))
+        self.assertEqual(feed.fresh()["rms_db"], -20.0)
+
+    def test_json_wrapped_in_osc_address(self):
+        from MCP_Server.analyzer_feed import AnalyzerFeed
+        feed = AnalyzerFeed(port=1)
+        feed.accept(_osc(json.dumps({"peak_db": -3.0})))
+        self.assertEqual(feed.fresh()["peak_db"], -3.0)
+
+    def test_track_frame_and_garbage(self):
+        from MCP_Server.analyzer_feed import AnalyzerFeed
+        feed = AnalyzerFeed(port=1)
+        feed.accept(_osc("/ytrack", "Bass Line", 1.0, 1.0, 0, 0, 0, 0, 0))
+        feed.accept(b"\xff\x00 not a frame")
+        feed.accept(_osc("/ytrack", "short", 1.0))
+        frame = feed.tracks()["Bass Line"]
+        self.assertEqual(frame["rms_db"], 0.0)
+        self.assertEqual(frame["bands"]["sub"], -999.0)
+        self.assertNotIn("short", feed.tracks())
+        self.assertEqual(feed.tracks(max_age=-1), {})
 
 
 if __name__ == "__main__":

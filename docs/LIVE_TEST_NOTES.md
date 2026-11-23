@@ -61,14 +61,43 @@ checked by hand in addition, what the test found, and what it did not cover.
 7. Live's own warp marker calls (`add_warp_marker`, `move_warp_marker`,
    `remove_warp_marker`, `Live.Clip.WarpMarker`) work in 12.3.6.
 
+## Track levels and Y Meter (2026-11-23, bridge 2.2.0)
+
+Run by hand against a throwaway Set in Live 12.3.6 (Wavetable chord clip playing on one
+track), not by `tests/live_protocol.py`:
+
+- `get_track_meters` read every track, both return tracks and the main track; MIDI tracks
+  without an instrument report no audio output. Live's display tick ran at about 5 per
+  second (2 s gave 10 to 11 readings), so the window is timed by the clock, not by
+  counting ticks.
+- **Y Meter** (`m4l/Y Meter.amxd`) loaded from the User Library on a track and on the
+  main track, passed the audio and sent `/ytrack` frames five times a second; the track
+  name arrives in quotes when it contains spaces (the server strips them).
+- **Meter scale.** Fader of the chord track stepped from 0 to -40 dB with Y Meter
+  pre-fader as reference (expected post-fader peak = Y Meter peak + fader):
+
+  | Expected peak (dBFS) | -12.7 | -15.7 | -18.6 | -24.6 | -30.6 | -36.6 | -42.7 | -52.6 |
+  |---|---|---|---|---|---|---|---|---|
+  | Live meter reading | 0.751 | 0.709 | 0.652 | 0.588 | 0.487 | 0.439 | 0.356 | 0.228 |
+
+  Least squares: `meter = 0.01292 * dB + 0.9043` (residuals up to 1.7 dB). Live's meter
+  is linear in dB, reaches 1.0 at about +7 dB and 0 at about -70 dB. The earlier
+  conversion in `get_master_levels` (`20 * log10(meter)`) was wrong and now uses this
+  calibration. Cross-check: the chord track at -20 dB fader read -32.0 dB on Live's
+  meter while a Y Meter on the main track measured -33.3 dBFS.
+- Not covered: peaks above -12 dBFS (the calibration is extrapolated there), stereo
+  material panned hard to one side, and the WASAPI analyzer at the same time.
+- Several MCP servers were running on the test machine and all listened on UDP 7878;
+  Windows delivered each datagram to one of them. The test used a Y Meter built for
+  port 7879 (`build_y_meter.py --port 7879`).
+
 ## Not tested
 
 - **macOS**, and any Live version other than 12.3.6.
-- **Real analyzer data.** `get_master_analysis`, `apply_mastering_corrections`,
-  `suggest_mastering_chain`, `color_track_by_spectrum` and
-  `color_all_tracks_by_spectrum` were fed one synthetic UDP frame by the test.
-  `analyzer/audio_analyzer.py`, the dashboard, the Windows service wrapper and
-  the Max for Live device in `m4l/` were not run.
+- **Real analyzer data.** `apply_mastering_corrections`, `suggest_mastering_chain`,
+  `color_track_by_spectrum` and `color_all_tracks_by_spectrum` were fed one synthetic
+  UDP frame by the test. `analyzer/audio_analyzer.py`, the dashboard and the Windows
+  service wrapper were not run (Y Meter was, see above).
 - **Audible output.** Nothing was checked by ear; the master meter was read
   once while a silent Set was playing.
 - **Loading third-party plug-ins.** `search_vst` listed installed plug-ins;

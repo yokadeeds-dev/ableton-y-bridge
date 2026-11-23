@@ -1,30 +1,33 @@
 # Copyright (C) 2026 Yoka
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Listet alle verfügbaren Audio-Devices auf — hilft bei der Zoom L-12 Konfiguration"""
-import sounddevice as sd
+"""Lists the WASAPI loopback devices the analyzer can measure.
+
+Put a part of the wanted device's name into ``audio.device_name_filter`` in
+config.json; with an empty filter the analyzer takes the first device listed.
+"""
 import sys
 
+
 def list_devices():
-    devices = sd.query_devices()
-    print("\n=== VERFÜGBARE AUDIO DEVICES ===\n")
-    print(f"{'Idx':<5} {'Name':<45} {'In':<5} {'Out':<5} {'Rate'}")
-    print("-" * 75)
-    for i, d in enumerate(devices):
-        marker = ""
-        name_lower = d['name'].lower()
-        if any(k in name_lower for k in ['zoom', 'l-12', 'l12']):
-            marker = " ← ZOOM L-12"
-        elif any(k in name_lower for k in ['stereo mix', 'loopback']):
-            marker = " ← LOOPBACK"
-        print(f"[{i:<3}] {d['name']:<45} {d['max_input_channels']:<5} {d['max_output_channels']:<5} {int(d['default_samplerate'])} Hz{marker}")
-    
-    print(f"\nDefault Input:  [{sd.default.device[0]}] {devices[sd.default.device[0]]['name']}")
-    print(f"Default Output: [{sd.default.device[1]}] {devices[sd.default.device[1]]['name']}")
-    print("\nFür Audio Analyzer: Das Zoom L-12 (oder Stereo Mix) als Input-Device verwenden.")
+    import pyaudiowpatch as pyaudio
+
+    audio = pyaudio.PyAudio()
+    try:
+        print("\nWASAPI loopback devices\n")
+        print(f"{'Idx':<5} {'Name':<55} {'Ch':<4} Rate")
+        print("-" * 75)
+        for device in audio.get_loopback_device_info_generator():
+            print(f"[{device['index']:<3}] {device['name'][:55]:<55} "
+                  f"{device['maxInputChannels']:<4} {int(device['defaultSampleRate'])} Hz")
+    finally:
+        audio.terminate()
+    print("\nSet audio.device_name_filter in config.json to a part of one of these names.")
+
 
 if __name__ == "__main__":
     try:
         list_devices()
-    except Exception as e:
-        print(f"Fehler: {e}")
-        print("Bitte sounddevice installieren: pip install sounddevice")
+    except Exception as problem:  # noqa: BLE001 - report and exit
+        print(f"Error: {problem}")
+        print("Install the analyzer packages: python -m pip install -r analyzer/requirements.txt")
+        sys.exit(1)

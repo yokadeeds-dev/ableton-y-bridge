@@ -8,7 +8,7 @@ matters for tests and for a second Live instance on another port.
 
 import os
 
-BRIDGE_VERSION = "2.1.0"
+BRIDGE_VERSION = "2.2.0"
 
 
 def _env_int(name, fallback):

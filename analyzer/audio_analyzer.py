@@ -84,15 +84,26 @@ class AudioAnalyzer:
             except Exception as e:
                 logger.warning(f"Filter build failed for {name}: {e}")
 
+    @staticmethod
+    def _device_name_filter():
+        """``audio.device_name_filter`` from config.json next to this script ('' = none)."""
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+        try:
+            with open(path, encoding='utf-8') as handle:
+                return str(json.load(handle).get('audio', {}).get('device_name_filter', '')).strip().lower()
+        except (OSError, ValueError):
+            return ''
+
     def _find_loopback_device(self):
         """
-        Find Zoom L-12 loopback device via pyaudiowpatch.
-        Falls back to the system default output loopback.
+        Find the WASAPI loopback device to measure.
+        A device whose name contains ``audio.device_name_filter`` from config.json
+        is preferred (for example the name of your audio interface); otherwise the
+        first loopback device, normally the Windows default output, is used.
         """
         logger.info("Scanning for WASAPI loopback devices...")
-
-        # Try Zoom L-12 loopback first
-        zoom_loopback = None
+        wanted = self._device_name_filter()
+        matching_loopback = None
         default_loopback = None
 
         try:
@@ -100,8 +111,8 @@ class AudioAnalyzer:
                 name = loopback['name'].lower()
                 logger.info(f"  Loopback device: [{loopback['index']}] {loopback['name']} "
                             f"(ch={loopback['maxInputChannels']}, sr={int(loopback['defaultSampleRate'])})")
-                if zoom_loopback is None and ('zoom' in name or 'l-12' in name or 'l12' in name):
-                    zoom_loopback = loopback
+                if wanted and matching_loopback is None and wanted in name:
+                    matching_loopback = loopback
                 if default_loopback is None:
                     default_loopback = loopback
         except AttributeError:
@@ -110,10 +121,13 @@ class AudioAnalyzer:
                 "Make sure pyaudiowpatch (not pyaudio) is installed."
             )
 
-        if zoom_loopback:
-            logger.info(f"Using Zoom L-12 loopback: [{zoom_loopback['index']}] {zoom_loopback['name']}")
-            return zoom_loopback
-        elif default_loopback:
+        if matching_loopback:
+            logger.info(f"Using loopback matching '{wanted}': "
+                        f"[{matching_loopback['index']}] {matching_loopback['name']}")
+            return matching_loopback
+        if wanted:
+            logger.warning(f"No loopback device matches '{wanted}'; using the default.")
+        if default_loopback:
             logger.info(f"Using default loopback: [{default_loopback['index']}] {default_loopback['name']}")
             return default_loopback
         else:

@@ -6,6 +6,7 @@ import math
 
 from ..errors import BAD_PARAMS, CommandError, out_of_range
 from ..liveaccess import db_of, peek, pick, still_there, track_kind, value_for_db
+from .meters import meter_to_db
 from ..registry import (
     DESTRUCTIVE,
     READ,
@@ -361,15 +362,12 @@ def get_master_levels(live):
     master = live.song.master_track
     left = float(master.output_meter_left)
     right = float(master.output_meter_right)
-
-    def to_db(level):
-        return round(20.0 * math.log10(level), 1) if level > 1e-9 else None
-
     return {
         "meter_left": round(left, 4),
         "meter_right": round(right, 4),
-        "peak_db": to_db(max(left, right)),
-        "mean_db": to_db((left + right) / 2.0),
+        "peak_db": meter_to_db(max(left, right)),
+        "mean_db": meter_to_db((left + right) / 2.0),
         "is_playing": bool(live.song.is_playing),
-        "note": "Peak meter snapshot, not a loudness measurement.",
+        "note": "Peak meter snapshot, approximate dBFS (about +-2 dB), "
+                "not a loudness measurement.",
     }

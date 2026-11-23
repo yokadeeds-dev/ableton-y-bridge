@@ -1,21 +1,30 @@
 # Copyright (C) 2026 Yoka
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Receives level and spectrum frames from an external analyzer over UDP.
+"""Receives level and spectrum frames from external analyzers over UDP.
 
-The analyzer (``analyzer/audio_analyzer.py`` or the Max for Live device in
-``m4l/``) sends one JSON datagram per measurement to this port. The feed
-keeps only the latest frame; tools ask for it together with its age.
+Two senders share the port:
+
+* ``analyzer/audio_analyzer.py`` measures what Windows plays (the master) and
+  sends one JSON datagram per measurement.
+* The Max for Live device "Y Meter" (``m4l/``) sits on any track and sends an
+  OSC message ``/ytrack <track name> rms peak sub low mid high air`` (linear
+  amplitudes) about five times a second.
+
+The feed keeps the latest master frame and the latest frame per track name;
+tools ask for them together with their age.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import socket
+import struct
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 log = logging.getLogger("ableton_mcp.analyzer")
 
@@ -30,6 +39,77 @@ BAND_RANGES = {
     "air": "8-20 kHz",
 }
 SILENT = -990.0  # analyzers send -999 for "no signal"
+TRACK_ADDRESS = "/ytrack"
+TRACK_FIELDS = ("rms", "peak") + BAND_ORDER
+
+
+def _osc_string(data: bytes, at: int) -> Tuple[str, int]:
+    end = data.index(b"\0", at)
+    text = data[at:end].decode("utf-8", "replace")
+    return text, (end + 4) & ~3
+
+
+def parse_osc(data: bytes) -> Tuple[str, List[object]]:
+    """Address and arguments of one OSC message (types s, i, f, d, h)."""
+    address, at = _osc_string(data, 0)
+    if at >= len(data) or data[at:at + 1] != b",":
+        return address, []
+    tags, at = _osc_string(data, at)
+    values: List[object] = []
+    for tag in tags[1:]:
+        if tag == "s":
+            text, at = _osc_string(data, at)
+            values.append(text)
+        elif tag == "i":
+            values.append(struct.unpack(">i", data[at:at + 4])[0]); at += 4
+        elif tag == "f":
+            values.append(struct.unpack(">f", data[at:at + 4])[0]); at += 4
+        elif tag == "d":
+            values.append(struct.unpack(">d", data[at:at + 8])[0]); at += 8
+        elif tag == "h":
+            values.append(struct.unpack(">q", data[at:at + 8])[0]); at += 8
+        else:
+            raise ValueError("unsupported OSC type %r" % tag)
+    return address, values
+
+
+def amp_db(value: float) -> float:
+    return round(20.0 * math.log10(value), 1) if value > 1e-9 else -999.0
+
+
+def track_frame(values: List[object]) -> Optional[Tuple[str, dict]]:
+    """(track name, frame in dB) from the arguments of a /ytrack message."""
+    if len(values) < 1 + len(TRACK_FIELDS):
+        return None
+    name = str(values[0]).strip()
+    if len(name) >= 2 and name[0] == name[-1] == '"':  # Max quotes names with spaces
+        name = name[1:-1]
+    numbers = values[1:1 + len(TRACK_FIELDS)]
+    if not all(isinstance(v, (int, float)) for v in numbers):
+        return None
+    levels = dict(zip(TRACK_FIELDS, (float(v) for v in numbers)))
+    frame = {
+        "rms_db": amp_db(levels["rms"]),
+        "peak_db": amp_db(levels["peak"]),
+        "bands": {band: amp_db(levels[band]) for band in BAND_ORDER},
+    }
+    return name, frame
+
+
+def decode_datagram(datagram: bytes) -> Tuple[Optional[dict], Optional[Tuple[str, dict]]]:
+    """(master frame, track frame); at most one of them is set."""
+    if datagram[:1] == b"/":
+        address, values = parse_osc(datagram)
+        if address == TRACK_ADDRESS:
+            return None, track_frame(values)
+        if address.startswith("{"):  # JSON sent as an OSC address by an older device
+            datagram = address.encode("utf-8")
+        else:
+            return None, None
+    elif datagram[:1] == b"{" and b"\0" in datagram:
+        datagram = datagram.split(b"\0", 1)[0]
+    frame = json.loads(datagram.decode("utf-8"))
+    return (frame if isinstance(frame, dict) else None), None
 
 
 class AnalyzerFeed:
@@ -37,6 +117,7 @@ class AnalyzerFeed:
         self.port = int(port or os.environ.get("ABLETON_MCP_ANALYZER_PORT", DEFAULT_PORT))
         self._frame: dict = {}
         self._stamp = 0.0
+        self._tracks: Dict[str, Tuple[dict, float]] = {}
         self._lock = threading.Lock()
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -63,6 +144,28 @@ class AnalyzerFeed:
         frame, age = self.latest()
         return frame if frame and age <= FRESH_SECONDS else None
 
+    def tracks(self, max_age: float = FRESH_SECONDS) -> Dict[str, dict]:
+        """Latest frame per track name, only those younger than ``max_age``."""
+        now = time.time()
+        with self._lock:
+            return {name: dict(frame, age_s=round(now - stamp, 2))
+                    for name, (frame, stamp) in self._tracks.items()
+                    if now - stamp <= max_age}
+
+    def accept(self, datagram: bytes) -> None:
+        """Store one received datagram (also used by the tests)."""
+        try:
+            master, track = decode_datagram(datagram)
+        except (UnicodeDecodeError, ValueError, struct.error, IndexError):
+            return
+        now = time.time()
+        with self._lock:
+            if master is not None:
+                self._frame = master
+                self._stamp = now
+            if track is not None:
+                self._tracks[track[0]] = (track[1], now)
+
     def _listen(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -82,14 +185,7 @@ class AnalyzerFeed:
                     continue
                 except OSError:
                     break
-                try:
-                    frame = json.loads(datagram.decode("utf-8"))
-                except (UnicodeDecodeError, ValueError):
-                    continue
-                if isinstance(frame, dict):
-                    with self._lock:
-                        self._frame = frame
-                        self._stamp = time.time()
+                self.accept(datagram)
         finally:
             sock.close()
 

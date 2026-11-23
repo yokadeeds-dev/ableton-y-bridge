@@ -13,8 +13,8 @@ Every bridge command and every MCP tool belongs to one zone.
 | reversible | changes the Set in a way that can be taken back | journal entry with a number; single-step undo where possible |
 | destructive | cannot be taken back from here, or writes files | runs only with an explicit confirmation |
 
-Counts at the time of writing: 79 tools (26 read, 46 reversible, 7 destructive) and
-87 bridge commands (31 read, 50 reversible, 6 destructive). The tool
+Counts at the time of writing: 80 tools (27 read, 46 reversible, 7 destructive) and
+88 bridge commands (32 read, 50 reversible, 6 destructive). The tool
 `get_safety_status` and the bridge command `list_commands` show the current tables.
 
 **Destructive tools:** `delete_device`, `clear_locators`, `snapshot_session` (it saves,

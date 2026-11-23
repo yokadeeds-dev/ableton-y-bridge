@@ -16,7 +16,7 @@ files where Live's own API ends.
 
 ## What it can do
 
-79 tools, grouped by subject. Every tool carries a zone: *read* (26), *reversible* (46)
+80 tools, grouped by subject. Every tool carries a zone: *read* (27), *reversible* (46)
 or *destructive* (7, they run only with `confirm=true`). Every change gets a numbered
 journal entry and most can be taken back one by one; see [Safety](#safety).
 
@@ -28,7 +28,7 @@ journal entry and most can be taken back one by one; see [Safety](#safety).
 | Devices and browser | `get_browser_tree`, `get_browser_items_at_path`, `search_vst`, `load_instrument_or_effect`, `load_device_on_master`, `load_device_on_return`, `load_drum_kit`, `get_device_parameters`, `set_device_parameter`, `set_return_device_parameter`, `delete_device`, `set_eq_mode`, `set_sidechain_routing` |
 | Arrangement | `get_arrangement_clips`, `set_clip_warp_mode`, `get_warp_markers`, `set_warp_marker`, `set_warp_markers_batch`, `get_locators`, `create_locator`, `delete_locator`, `clear_locators` |
 | `.als` project files | `als_warp_read`, `als_warp_write`, `als_warp_derive`, `set_tempo_automation`, `set_wavetable_mod_routing`, `snapshot_session`, `list_snapshots` |
-| Levels and mastering help | `get_master_analysis`, `apply_mastering_corrections`, `suggest_mastering_chain`, `color_track_by_spectrum`, `color_all_tracks_by_spectrum` |
+| Levels and mastering help | `get_track_levels` (all tracks side by side, live), `get_master_analysis`, `apply_mastering_corrections`, `suggest_mastering_chain`, `color_track_by_spectrum`, `color_all_tracks_by_spectrum` |
 | Safety | `get_safety_status`, `list_ai_changes`, `undo_ai_change` |
 | Maintenance | `bridge_status` (version and health check), `hot_reload` |
 
@@ -82,7 +82,7 @@ Requirements: Ableton Live 12, Python 3.10 or newer.
 
 3. Start Live, open **Settings > Link, Tempo & MIDI** and choose **AbletonMCP** as a
    Control Surface (input and output stay at "None"). Live's status bar shows
-   "Ableton Y Bridge 2.1.0 on port 9877".
+   "Ableton Y Bridge 2.2.0 on port 9877".
 
 4. Tell your MCP client about the server. For Claude Desktop or Claude Code:
 
@@ -134,8 +134,17 @@ Details, the list of what can be taken back, and the limits of all this:
   (`clear_locators` stops it itself).
 - **Freezing** is not possible through Live's API; `freeze_track` reports the state.
 - **One selected track.** Live's API has no multi-selection.
-- **Spectrum and loudness** need the external analyzer (below). Without it
-  `get_master_analysis` shows Live's master meter only.
+- **Levels, spectrum and loudness while the song plays** come from three sources:
+  - Live's own meters, for every track at once: `get_track_levels` samples them for a
+    few seconds and converts them to approximate dBFS (post-fader, about ±2 dB; the
+    conversion was measured in Live, see `AbletonMCP_Remote_Script/handlers/meters.py`).
+  - **Y Meter**, a Max for Live device for any track: RMS, peak and a five-band spectrum
+    of that track ([m4l/README.md](m4l/README.md)).
+  - The WASAPI analyzer for the whole mix: loudness (approximate LUFS) and spectrum of
+    what Windows plays (below).
+
+  All of this needs playback; stopped tracks read silent. None of it is a loudness
+  measurement per track.
 - **`.als` tools** edit the file on disk and make a backup by default. Reload the project
   in Live to see the change, and do not save from Live in between.
 - **`eval_code`** (run a Python expression inside Live) exists as a bridge command for
@@ -146,10 +155,14 @@ Details, the list of what can be taken back, and the limits of all this:
 
 ## Optional parts
 
-- `analyzer/`: a WASAPI loopback analyzer (`audio_analyzer.py`) that sends level,
-  loudness and a five-band spectrum over UDP, a small dashboard, and a wrapper to run it
-  as a Windows service. Needs the packages in `analyzer/requirements.txt`.
-- `m4l/`: sources for a Max for Live device that sends the same frames from inside Live.
+- `analyzer/`: a WASAPI loopback analyzer (`audio_analyzer.py`) that measures what
+  Windows plays and sends level, loudness and a five-band spectrum over UDP about five
+  times a second, a small dashboard, and a wrapper to run it as a Windows service. Needs
+  the packages in `analyzer/requirements.txt`; `list_audio_devices.py` shows which output
+  it can measure (choose one with `device_name_filter` in `analyzer/config.json`). If Live
+  plays through an ASIO interface without a loopback device, use Y Meter instead.
+- `m4l/`: **Y Meter**, the Max for Live device for levels and spectrum per track, and the
+  script that builds it ([m4l/README.md](m4l/README.md)).
 - `tools/melody_check/`: scripts that compare Live's Melody-to-MIDI result with the
   source vocal (project-specific settings at the top of each file).
 - `docs/PROMPTS.md`: example prompts.

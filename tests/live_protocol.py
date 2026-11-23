@@ -147,7 +147,7 @@ async def scenario(run: Run) -> None:
     write_test_tone(tone)
 
     # -- bridge ------------------------------------------------------------
-    status = json.loads(await t("bridge_status", expect='"bridge_version": "2.1.0"'))
+    status = json.loads(await t("bridge_status", expect='"bridge_version": "2.2.0"'))
     await t("hot_reload", expect="Hot reload ok")
     again = json.loads(await t("bridge_status", note="after hot reload",
                                expect=lambda s: json.loads(s)["reload_count"]
@@ -243,6 +243,7 @@ async def scenario(run: Run) -> None:
     await t("start_playback", expect="Playing")
     await asyncio.sleep(0.5)
     await t("get_master_analysis", expect="Master track")
+    await t("get_track_levels", seconds=1.0, expect="Track levels over")
     await t("stop_playback", expect="Stopped", note="second call")
     await t("undo", expect=lambda s: "Undone" in s or "Nothing undone" in s)
     await t("redo", expect=lambda s: "Redone" in s or "Nothing redone" in s)
