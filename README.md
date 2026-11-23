@@ -194,6 +194,16 @@ The code in this repository has since been written from scratch and contains no 
 those projects; [docs/TEMPLATE_AUDIT.md](docs/TEMPLATE_AUDIT.md) documents the comparison.
 The wire format is kept compatible so that clients speaking it continue to work.
 
+## Why open source
+
+I believe in open source. Knowledge and progress grow when they are shared, and I don't
+like seeing progress held back because someone sits on it for financial reasons. Together
+we can shape things much better than each on our own.
+
+That is why Ableton Y Bridge is licensed under the AGPL: anyone may use, study and improve
+it, and improvements stay open for everyone. The commercial licence exists only for those
+who want to build it into a closed product.
+
 ## Licence
 
 Ableton Y Bridge is dual-licensed:
