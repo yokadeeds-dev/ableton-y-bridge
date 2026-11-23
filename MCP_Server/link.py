@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Client side of the bridge: one TCP connection to the Remote Script in Live.
 
 `LiveLink.call("set_tempo", tempo=120)` sends ``{"type", "params"}``, waits

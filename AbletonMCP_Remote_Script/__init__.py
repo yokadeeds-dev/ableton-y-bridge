@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Remote Script package for Ableton Live.
 
 Install by copying this folder to ``User Library/Remote Scripts/AbletonMCP``

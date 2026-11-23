@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Reading audio files on the server side (Live does not publish sample data)."""
 
 from __future__ import annotations

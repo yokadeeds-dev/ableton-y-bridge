@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Warp marker primitives on top of whatever the running Live version offers.
 
 A warp marker pins a point of the sample (``sample_time``, seconds) to a

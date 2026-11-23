@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Command register: one entry per wire command, with handler and metadata.
 
 A command is declared next to its implementation::

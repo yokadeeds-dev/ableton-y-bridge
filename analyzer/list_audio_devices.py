@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Listet alle verfügbaren Audio-Devices auf — hilft bei der Zoom L-12 Konfiguration"""
 import sounddevice as sd
 import sys

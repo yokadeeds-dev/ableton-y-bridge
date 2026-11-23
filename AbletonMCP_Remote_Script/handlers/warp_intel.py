@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Warp marker operations that look at the neighbourhood of a marker.
 
 Moving a single warp marker stretches the audio between it and its two

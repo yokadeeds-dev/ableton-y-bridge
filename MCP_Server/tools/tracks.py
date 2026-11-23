@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Tracks, mixer and return tracks."""
 
 from __future__ import annotations

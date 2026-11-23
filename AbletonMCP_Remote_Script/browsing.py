@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Navigation in Live's browser: roots, paths, URI lookup, name search."""
 
 from .errors import NOT_FOUND, CommandError

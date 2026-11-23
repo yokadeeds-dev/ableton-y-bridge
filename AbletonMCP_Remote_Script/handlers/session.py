@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Song-level commands: overview, tempo, transport, scenes, views, undo."""
 
 from ..errors import BAD_PARAMS, NOT_FOUND, UNSUPPORTED, CommandError

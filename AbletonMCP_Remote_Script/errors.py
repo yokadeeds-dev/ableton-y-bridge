@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Error type shared by the bridge core and all command handlers."""
 
 # Stable error codes. They travel to the client next to the human message so

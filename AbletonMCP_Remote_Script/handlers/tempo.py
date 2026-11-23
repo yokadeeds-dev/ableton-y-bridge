@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Tempo follower: steps the song tempo through a list of breakpoints.
 
 A stopgap for Sets without tempo automation: while it is active the bridge

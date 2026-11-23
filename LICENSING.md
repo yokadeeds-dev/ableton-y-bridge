@@ -1,5 +1,7 @@
 # Licensing
 
+Copyright (C) 2026 Yoka
+
 Ableton Y Bridge is offered under a **dual licence**.
 
 ## 1. Open source: AGPL-3.0

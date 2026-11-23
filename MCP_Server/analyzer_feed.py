@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Receives level and spectrum frames from an external analyzer over UDP.
 
 The analyzer (``analyzer/audio_analyzer.py`` or the Max for Live device in

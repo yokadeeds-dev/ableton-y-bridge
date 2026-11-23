@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Safety tools: what the assistant may do, and the journal of what it did."""
 
 from __future__ import annotations

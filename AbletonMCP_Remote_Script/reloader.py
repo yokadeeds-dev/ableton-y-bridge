@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Loading and hot reloading of everything that is not bridge core.
 
 Core modules (listed in `CORE`) hold the running socket server, the gate and

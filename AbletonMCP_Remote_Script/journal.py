@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Numbered journal of the changes made through the bridge, with single-step undo.
 
 Every command that changes the Live Set gets an entry with a running number,

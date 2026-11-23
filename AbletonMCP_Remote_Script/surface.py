@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """The control surface object Live talks to.
 
 It does three things: start the TCP listener, give socket threads a way into

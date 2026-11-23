@@ -1,4 +1,6 @@
 @echo off
+REM Copyright (C) 2026 Yoka
+REM SPDX-License-Identifier: AGPL-3.0-only
 REM Installation and startup script for audio analyzer
 REM This script installs required packages and starts the audio analyzer
 

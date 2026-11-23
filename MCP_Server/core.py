@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Shared objects of the MCP server: the FastMCP app, the link to Live, the
 analyzer feed and the ``tool`` decorator all tool modules use."""
 

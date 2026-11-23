@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """A small stand-in for Ableton Live's Python API, for tests without Live.
 
 It models just enough of the Live Object Model for the Remote Script's

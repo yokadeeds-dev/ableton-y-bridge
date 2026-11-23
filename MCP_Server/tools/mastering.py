@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Level and spectrum feedback, and mastering helpers built on it.
 
 Spectrum data comes from an external analyzer (see ``analyzer/`` and

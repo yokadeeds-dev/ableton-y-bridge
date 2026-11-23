@@ -204,7 +204,12 @@ That is why Ableton Y Bridge is licensed under the AGPL: anyone may use, study a
 it, and improvements stay open for everyone. The commercial licence exists only for those
 who want to build it into a closed product.
 
+I also have a bit of a gamer's mindset: I like seeing my name in the high-score table. So if
+the bridge helps you, a mention of "Yoka" in your credits makes my day.
+
 ## Licence
+
+Copyright (C) 2026 Yoka
 
 Ableton Y Bridge is dual-licensed:
 

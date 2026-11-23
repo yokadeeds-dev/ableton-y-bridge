@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Yoka
+// SPDX-License-Identifier: AGPL-3.0-only
 // ableton_mcp_udp.js - Max for Live JS object
 // Receives RMS/Peak values, sends JSON via UDP outlet
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Bidirectional coverage check and duration alignment.
 
 For the cleaned MIDI clip (115 notes), find:

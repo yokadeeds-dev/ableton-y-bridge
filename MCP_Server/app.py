@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Assembles the server: importing the tool modules registers all tools."""
 
 from __future__ import annotations

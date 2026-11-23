@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Apply the Melody-to-MIDI cleanup: delete ghost notes, fix pitch errors.
 
 Reads melody_to_midi_report.json + melody_original_notes_backup.json,

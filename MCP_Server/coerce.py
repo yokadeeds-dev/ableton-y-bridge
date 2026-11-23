@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Lenient conversion of tool arguments.
 
 MCP clients differ in what they send: some pass numbers and booleans as

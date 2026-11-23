@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Reading and writing MIDI notes, independent of where the clip lives.
 
 One note format is used on the wire in both directions::

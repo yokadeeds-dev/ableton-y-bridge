@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Small music-theory helpers used by the tools: rhythm, key, curve shapes."""
 
 from __future__ import annotations

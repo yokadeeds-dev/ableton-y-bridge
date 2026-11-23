@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Real-time audio analyzer for Ableton Live
 Captures system audio via WASAPI loopback (pyaudiowpatch),

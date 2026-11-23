@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Keyboard shortcuts for the two things Live's API has no call for:
 saving the Set and grouping tracks.
 

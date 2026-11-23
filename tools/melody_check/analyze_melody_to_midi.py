@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Compare Live 12 Melody-to-MIDI output against source vocal audio.
 
 Fetches MIDI notes from a track's arrangement clip via AbletonMCP socket,

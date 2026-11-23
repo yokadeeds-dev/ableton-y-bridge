@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Measure how much of this repository's text also occurs in reference code.
 
 Purpose: show that the code here was written independently of the projects

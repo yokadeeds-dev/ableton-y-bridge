@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Arrangement view: clips on the timeline, warp markers, locators."""
 
 from __future__ import annotations

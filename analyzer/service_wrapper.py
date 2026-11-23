@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Windows Service Wrapper for Audio Analyzer
 Allows running the analyzer as a Windows service using NSSM or SC commands

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Old keyword calls that used to ride on ``set_warp_markers_batch``.
 
 Before the bridge had a command register, extra functions were reached by

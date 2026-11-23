@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Offset Calibrator for Drums vs Bass Warp Markers
 =================================================

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """TCP side of the bridge: listener, per-client sessions, message framing.
 
 Wire format (unchanged for compatibility with existing clients):

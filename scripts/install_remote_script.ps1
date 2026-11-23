@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 <#
 Installs the Remote Script into Ableton Live's User Library (Windows).
 

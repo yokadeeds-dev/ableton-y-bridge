@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Calls every MCP tool once against a running Ableton Live and writes a protocol.
 
 The MCP server is started as a child process and spoken to over stdio with

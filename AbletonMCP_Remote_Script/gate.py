@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Hand-over of work from socket threads into Live's main thread.
 
 Live's Python API may only be touched from the thread Live itself calls the

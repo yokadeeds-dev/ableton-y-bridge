@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Warp markers of Arrangement audio clips, single and in bulk."""
 
 from .. import warpops

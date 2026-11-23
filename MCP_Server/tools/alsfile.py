@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Tools that work on .als project files instead of the running Live.
 
 Used where Live's API ends: bulk warp markers, tempo automation, Wavetable

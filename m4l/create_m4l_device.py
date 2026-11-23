@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Creates an AbletonMCP_Analyzer.amxd Max for Live device.
 The device uses Max's built-in objects to analyze audio and send UDP.

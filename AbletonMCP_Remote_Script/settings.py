@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Fixed settings of the bridge. Environment variables override the defaults.
 
 Live is usually started from the Start menu, so the environment route mostly

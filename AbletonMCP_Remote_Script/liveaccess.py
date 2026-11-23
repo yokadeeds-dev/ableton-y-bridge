@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """What a handler gets to work with: checked access to the Live Set.
 
 Every handler receives a `LiveCtx` as its first argument. The lookups here

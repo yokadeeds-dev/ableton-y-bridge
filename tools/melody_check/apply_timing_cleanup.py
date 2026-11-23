@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Yoka
+# SPDX-License-Identifier: AGPL-3.0-only
 """Snap MIDI note starts to nearest audio onset.
 
 Operates on the already-cleaned 115-note clip. For every note where the
