@@ -78,7 +78,7 @@ track), not by `tests/live_protocol.py`:
   name arrives in quotes when it contains spaces (the server strips them).
 - **Meter scale, first attempt (superseded).** Fader steps from 0 to -40 dB with the Y
   Meter device as reference gave `meter = 0.01292 * dB + 0.9043`. Checked later against
-  sine files of known level this was 0.4 to 1.3 dB off: Y Meter is not a neutral
+  sine files of known level this was 0.2 to 1.3 dB off: Y Meter is not a neutral
   reference. The earlier conversion in `get_master_levels` (`20 * log10(meter)`) was
   wrong as well.
 - **Meter scale, checked against sine tones.** 1 kHz sine files with peaks of 0, -6,

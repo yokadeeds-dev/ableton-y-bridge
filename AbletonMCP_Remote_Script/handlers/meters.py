@@ -22,7 +22,7 @@ MAX_SECONDS = 10.0
 # Faderhand uses). Checked in Live 12.3.6 with 1 kHz sine files of known peak
 # level from 0 to -60 dBFS: every step within 0.01 dB, for output_meter_level,
 # left and right alike (conformance repository, calibration report 2026-11-23).
-# An earlier calibration against the Y Meter device was 0.4 to 1.3 dB off.
+# An earlier calibration against the Y Meter device was 0.2 to 1.3 dB off.
 DB_PER_METER = 76.0
 DB_AT_METER_ZERO = -70.0
 METER_AT_0DB = -DB_AT_METER_ZERO / DB_PER_METER  # 0.921

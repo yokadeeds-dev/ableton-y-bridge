@@ -56,7 +56,7 @@ INSTRUCTIONS = (
     "single calls. Tools that write .als files need the project reloaded in Live "
     "afterwards. Safety: every change gets a journal number (#n) shown in the answer; "
     "undo_ai_change(n) takes back exactly that step, list_ai_changes shows the journal. "
-    "Destructive tools (deleting devices or locators, saving, writing .als files) only "
+    "Destructive tools (deleting devices, clearing all locators, saving, writing .als files) only "
     "run with confirm=true: ask the user first, never set it on your own initiative."
 )
 
