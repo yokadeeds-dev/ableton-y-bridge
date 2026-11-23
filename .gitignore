@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+.claude/worktrees/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Audio and Live project data
+*.wav
+*.aif
+*.aiff
+*.mp3
+*.flac
+*.als
+*.alc
+*.adg
+*.adv
+*.asd
+
+# Runtime output
+*.log
+*.bak
+*.tmp
+session_snapshots/
+analyzer_cache.json
+tools/melody_check/*.json
+
+# Opt-in switch for eval_code; never commit it
+allow_eval.flag

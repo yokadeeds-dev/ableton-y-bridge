@@ -1,0 +1,29 @@
+[project]
+name = "ableton-y-bridge"
+version = "2.0.0"
+description = "MCP server and Remote Script that let an AI assistant work in Ableton Live"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Yoka" }]
+license = "AGPL-3.0-only"  # plus commercial licence, see LICENSING.md
+dependencies = [
+    "mcp[cli]>=1.8",
+]
+
+[project.optional-dependencies]
+# Reading audio files for normalize_clip (WAV works without it)
+audio = ["soundfile>=0.12"]
+# The external level/spectrum analyzer in analyzer/
+analyzer = ["numpy>=1.24", "scipy>=1.10", "sounddevice>=0.4.5", "pyloudnorm>=0.1.1"]
+# tools/melody_check
+melody = ["librosa>=0.10", "numpy>=1.24"]
+
+[project.scripts]
+ableton-y-bridge = "MCP_Server.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["MCP_Server", "MCP_Server.tools"]

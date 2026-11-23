@@ -1,0 +1,30 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "block_size": 2048,
+    "device_name_filter": "stereo mix",
+    "channels": 1
+  },
+  "analysis": {
+    "update_interval_ms": 200,
+    "peak_hold_seconds": 1.0,
+    "buffer_duration_seconds": 2.0
+  },
+  "udp": {
+    "host": "localhost",
+    "port": 7878,
+    "enabled": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "audio_analyzer.log",
+    "console": true
+  },
+  "spectral_bands": {
+    "sub": [20, 60],
+    "low": [60, 250],
+    "mid": [250, 2000],
+    "high": [2000, 8000],
+    "air": [8000, 20000]
+  }
+}
