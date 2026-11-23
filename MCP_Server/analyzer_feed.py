@@ -11,7 +11,9 @@ Two senders share the port:
   amplitudes) about five times a second.
 
 The feed keeps the latest master frame and the latest frame per track name;
-tools ask for them together with their age.
+tools ask for them together with their age. When several MCP servers run at
+the same time, one of them owns the port and relays every frame to the
+others (see ``AnalyzerFeed``).
 """
 
 from __future__ import annotations
@@ -112,7 +114,35 @@ def decode_datagram(datagram: bytes) -> Tuple[Optional[dict], Optional[Tuple[str
     return (frame if isinstance(frame, dict) else None), None
 
 
+SUBSCRIBE = b"YSUB"  # "send me a copy of every frame"
+LOOPBACK = "127.0.0.1"
+
+
+def _quiet_udp(sock: socket.socket) -> None:
+    """Windows reports an ICMP 'port unreachable' from an earlier sendto as an
+    error on the next recvfrom; switch that off where possible."""
+    if hasattr(socket, "SIO_UDP_CONNRESET"):
+        try:
+            sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+        except (OSError, ValueError):
+            pass
+
+
 class AnalyzerFeed:
+    """Listens for analyzer frames; several MCP servers can run at once.
+
+    Only one socket can own the UDP port. The server that gets it (the hub)
+    receives the frames and passes a copy of each to every other server that
+    asked for it: those bind a private loopback port and send ``YSUB`` to the
+    hub every ``renew_s`` seconds. They also try to take the port over at the
+    same pace, so when the hub ends another server becomes the hub. Senders
+    (the analyzer, Y Meter) need not know about any of this.
+    """
+
+    renew_s = 2.0
+    subscriber_ttl_s = 6.0
+    poll_s = 0.25
+
     def __init__(self, port: Optional[int] = None):
         self.port = int(port or os.environ.get("ABLETON_MCP_ANALYZER_PORT", DEFAULT_PORT))
         self._frame: dict = {}
@@ -121,6 +151,8 @@ class AnalyzerFeed:
         self._lock = threading.Lock()
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self.role = "stopped"  # "hub", "relayed" or "stopped"
+        self.subscribers = 0
 
     def start(self) -> None:
         if self._running:
@@ -131,6 +163,9 @@ class AnalyzerFeed:
 
     def stop(self) -> None:
         self._running = False
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2.0)
 
     def latest(self) -> Tuple[dict, float]:
         """(frame, age in seconds). An empty frame means nothing was received."""
@@ -166,28 +201,87 @@ class AnalyzerFeed:
             if track is not None:
                 self._tracks[track[0]] = (track[1], now)
 
-    def _listen(self) -> None:
+    def _bind_hub(self) -> Optional[socket.socket]:
+        """The shared port, exclusively, or None if another socket holds it."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.settimeout(1.0)
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows: nobody may take it over
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         try:
-            sock.bind(("", self.port))
-        except OSError as problem:
-            log.warning("analyzer feed: cannot listen on UDP %d (%s)", self.port, problem)
-            self._running = False
-            return
-        log.info("analyzer feed listening on UDP %d", self.port)
+            sock.bind((LOOPBACK, self.port))
+        except OSError:
+            sock.close()
+            return None
+        _quiet_udp(sock)
+        sock.settimeout(self.poll_s)
+        return sock
+
+    def _bind_private(self) -> socket.socket:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((LOOPBACK, 0))
+        _quiet_udp(sock)
+        sock.settimeout(self.poll_s)
+        return sock
+
+    def _listen(self) -> None:
+        hub: Optional[socket.socket] = None
+        private: Optional[socket.socket] = None
+        subscribers: Dict[Tuple[str, int], float] = {}
+        last_try = 0.0
         try:
             while self._running:
+                now = time.time()
+                if hub is None and now - last_try >= self.renew_s:
+                    last_try = now
+                    hub = self._bind_hub()
+                    if hub is not None:
+                        if private is not None:
+                            private.close()
+                            private = None
+                        self.role = "hub"
+                        log.info("analyzer feed: receiving on UDP %d", self.port)
+                    else:
+                        if private is None:
+                            private = self._bind_private()
+                            log.info("analyzer feed: UDP %d is taken, asking its owner "
+                                     "for copies", self.port)
+                        self.role = "relayed"
+                        try:
+                            private.sendto(SUBSCRIBE, (LOOPBACK, self.port))
+                        except OSError:
+                            pass
+                sock = hub if hub is not None else private
+                if sock is None:
+                    time.sleep(self.poll_s)
+                    continue
                 try:
-                    datagram, _sender = sock.recvfrom(8192)
+                    datagram, sender = sock.recvfrom(65535)
                 except socket.timeout:
                     continue
                 except OSError:
-                    break
+                    continue  # e.g. a reset reported for an earlier send
+                if hub is not None:
+                    if datagram == SUBSCRIBE:
+                        subscribers[sender] = now
+                        self.subscribers = len(subscribers)
+                        continue
+                    for address, seen in list(subscribers.items()):
+                        if now - seen > self.subscriber_ttl_s:
+                            del subscribers[address]
+                            continue
+                        try:
+                            hub.sendto(datagram, address)
+                        except OSError:
+                            pass
+                    self.subscribers = len(subscribers)
+                elif datagram == SUBSCRIBE:
+                    continue
                 self.accept(datagram)
         finally:
-            sock.close()
+            for sock in (hub, private):
+                if sock is not None:
+                    sock.close()
+            self.role = "stopped"
+            self.subscribers = 0
 
 
 def audible_bands(frame: dict) -> dict:

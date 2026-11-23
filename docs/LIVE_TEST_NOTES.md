@@ -89,7 +89,11 @@ track), not by `tests/live_protocol.py`:
   material panned hard to one side, and the WASAPI analyzer at the same time.
 - Several MCP servers were running on the test machine and all listened on UDP 7878;
   Windows delivered each datagram to one of them. The test used a Y Meter built for
-  port 7879 (`build_y_meter.py --port 7879`).
+  port 7879 (`build_y_meter.py --port 7879`). Because of this the analyzer feed now
+  shares the port: one server owns it and relays every frame to the others. Checked
+  after a restart of Live with two feed processes on 7879 and a Y Meter on a track:
+  the first became hub with one subscriber, both received the track's frames. The
+  take-over when the hub ends runs in the offline tests (three feeds).
 
 ## Not tested
 

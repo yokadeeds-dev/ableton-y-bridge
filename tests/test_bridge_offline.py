@@ -583,6 +583,47 @@ class AnalyzerFeedTests(unittest.TestCase):
         self.assertNotIn("short", feed.tracks())
         self.assertEqual(feed.tracks(max_age=-1), {})
 
+    def test_several_servers_share_the_port(self):
+        from MCP_Server.analyzer_feed import AnalyzerFeed
+
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+
+        def wait(condition, seconds=3.0):
+            end = time.time() + seconds
+            while time.time() < end:
+                if condition():
+                    return True
+                time.sleep(0.02)
+            return False
+
+        def send(name):
+            out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            out.sendto(_osc("/ytrack", name, 1.0, 1.0, 0, 0, 0, 0, 0), ("127.0.0.1", port))
+            out.close()
+
+        first, second, third = (AnalyzerFeed(port=port) for _ in range(3))
+        for feed in (first, second, third):
+            feed.renew_s, feed.poll_s = 0.2, 0.05
+        try:
+            first.start()
+            self.assertTrue(wait(lambda: first.role == "hub"))
+            second.start()
+            third.start()
+            self.assertTrue(wait(lambda: second.role == third.role == "relayed"
+                                 and first.subscribers == 2))
+            self.assertTrue(wait(lambda: (send("One") or True)
+                                 and all("One" in f.tracks() for f in (first, second, third))))
+            first.stop()  # the owner ends: one of the others takes the port over
+            self.assertTrue(wait(lambda: "hub" in (second.role, third.role)))
+            self.assertTrue(wait(lambda: (send("Two") or True)
+                                 and all("Two" in f.tracks() for f in (second, third))))
+        finally:
+            for feed in (first, second, third):
+                feed.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

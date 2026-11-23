@@ -39,8 +39,10 @@ next to Live's own meter reading. A Y Meter on the main track also feeds
 - **RMS, not loudness:** there is no K-weighting, so the values are not LUFS.
 - **Names:** frames are matched to tracks by name. Two tracks with the same name share
   one entry.
-- **One receiver:** the MCP server listens on UDP 7878. If several MCP servers run at the
-  same time (for example Claude Desktop and Claude Code both started one), Windows hands
-  each message to only one of them, and the others see no data. Run one server, or build
-  a copy for another port with `--port` and set `ABLETON_MCP_ANALYZER_PORT` to match.
+- **Several MCP servers:** when more than one server runs (for example Claude Desktop and
+  Claude Code each started one), the first one owns UDP 7878 and passes every frame on to
+  the others; if it ends, another takes over within about two seconds. `bridge_status`
+  shows each server's role under `analyzer_feed`. Servers older than bridge 2.2.0 do not
+  take part: restart them. For a different port, build a copy with `--port` and set
+  `ABLETON_MCP_ANALYZER_PORT` to match.
 - Each instance costs a little CPU (five filters and seven meters).

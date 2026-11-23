@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from ..coerce import BoolLike, FloatLike, IntLike, to_bool, to_float, to_int
-from ..core import READ, REVERSIBLE, TOOLS, live, tool
+from ..core import READ, REVERSIBLE, TOOLS, analyzer, live, tool
 
 
 @tool(READ)
@@ -168,7 +168,9 @@ def bridge_status() -> str:
 
     Reports the Remote Script version, how many commands it offers, a hash
     of its source files as loaded from disk, whether a restart of Live is
-    pending after core changes, and Live's own version.
+    pending after core changes, and Live's own version. ``analyzer_feed``
+    says whether this server owns the analyzer port ("hub") or gets copies
+    of the frames from the server that owns it ("relayed").
     """
     result = live.call("get_version")
     zones = {"read": 0, "reversible": 0, "destructive": 0}
@@ -176,4 +178,6 @@ def bridge_status() -> str:
         zones[entry["zone"]] += 1
     result["mcp_tools"] = len(TOOLS)
     result["mcp_tools_by_zone"] = zones
+    result["analyzer_feed"] = {"udp_port": analyzer.port, "role": analyzer.role,
+                               "servers_receiving_copies": analyzer.subscribers}
     return result
