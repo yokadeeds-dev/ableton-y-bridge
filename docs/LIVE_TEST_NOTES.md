@@ -76,20 +76,24 @@ track), not by `tests/live_protocol.py`:
 - **Y Meter** (`m4l/Y Meter.amxd`) loaded from the User Library on a track and on the
   main track, passed the audio and sent `/ytrack` frames five times a second; the track
   name arrives in quotes when it contains spaces (the server strips them).
-- **Meter scale.** Fader of the chord track stepped from 0 to -40 dB with Y Meter
-  pre-fader as reference (expected post-fader peak = Y Meter peak + fader):
-
-  | Expected peak (dBFS) | -12.7 | -15.7 | -18.6 | -24.6 | -30.6 | -36.6 | -42.7 | -52.6 |
-  |---|---|---|---|---|---|---|---|---|
-  | Live meter reading | 0.751 | 0.709 | 0.652 | 0.588 | 0.487 | 0.439 | 0.356 | 0.228 |
-
-  Least squares: `meter = 0.01292 * dB + 0.9043` (residuals up to 1.7 dB). Live's meter
-  is linear in dB, reaches 1.0 at about +7 dB and 0 at about -70 dB. The earlier
-  conversion in `get_master_levels` (`20 * log10(meter)`) was wrong and now uses this
-  calibration. Cross-check: the chord track at -20 dB fader read -32.0 dB on Live's
-  meter while a Y Meter on the main track measured -33.3 dBFS.
-- Not covered: peaks above -12 dBFS (the calibration is extrapolated there), stereo
-  material panned hard to one side, and the WASAPI analyzer at the same time.
+- **Meter scale, first attempt (superseded).** Fader steps from 0 to -40 dB with the Y
+  Meter device as reference gave `meter = 0.01292 * dB + 0.9043`. Checked later against
+  sine files of known level this was 0.4 to 1.3 dB off: Y Meter is not a neutral
+  reference. The earlier conversion in `get_master_levels` (`20 * log10(meter)`) was
+  wrong as well.
+- **Meter scale, checked against sine tones.** 1 kHz sine files with peaks of 0, -6,
+  -12, -24, -36, -48 and -60 dBFS, played from session clips (warping off) on a track at
+  0 dB, read through Faderhand's `get_meters`: every step matches `dBFS = 76 * meter -
+  70` within 0.01 dB, for `output_meter_level`, `output_meter_left` and
+  `output_meter_right` alike (report and script in the conformance repository,
+  `results/2026-11-23-2046-calibration-windows.md`). This is the formula Faderhand
+  uses; the bridge now uses it too. `output_meter_level` is the louder channel and holds
+  a peak for about a second; left and right do not hold, so the bridge now reads
+  `output_meter_level`. Panned hard left, the left meter reads 3 dB higher (pan law).
+- **Against Faderhand in the same Live** (conformance run 2026-11-23 20:52): both
+  servers measured the peak of the same track in the same 3 s window within 0.05 dB;
+  fader read-back agreed in both directions.
+- Not covered: the WASAPI analyzer at the same time; material with very short peaks.
 - Several MCP servers were running on the test machine and all listened on UDP 7878;
   Windows delivered each datagram to one of them. The test used a Y Meter built for
   port 7879 (`build_y_meter.py --port 7879`). Because of this the analyzer feed now

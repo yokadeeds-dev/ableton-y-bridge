@@ -522,7 +522,7 @@ class ToolTests(BridgeCase):
         first = result["tracks"][0]
         self.assertEqual(first["meter_peak"], 0.5)  # max of the fake meters 0.5 / 0.25
         self.assertEqual(first["meter_mean"], 0.5)
-        self.assertEqual(first["peak_db"], -31.3)  # calibration: (0.5 - 0.9043) / 0.01292
+        self.assertEqual(first["peak_db"], -32.0)  # 76 * 0.5 - 70 (fake has no output_meter_level)
         without = self.call("get_track_meters", seconds=0, include_returns=False)
         self.assertNotIn("return", [row["kind"] for row in without["tracks"]])
 
@@ -624,6 +624,14 @@ class AnalyzerFeedTests(unittest.TestCase):
             for feed in (first, second, third):
                 feed.stop()
 
+
+
+class StrictJsonTests(unittest.TestCase):
+    def test_infinity_becomes_null(self):
+        from MCP_Server.core import strict_json
+        text = json.dumps(strict_json({"volume_db": float("-inf"), "x": [float("nan"), 1.5]}),
+                          allow_nan=False)
+        self.assertEqual(json.loads(text), {"volume_db": None, "x": [None, 1.5]})
 
 if __name__ == "__main__":
     unittest.main()

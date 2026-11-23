@@ -368,6 +368,6 @@ def get_master_levels(live):
         "peak_db": meter_to_db(max(left, right)),
         "mean_db": meter_to_db((left + right) / 2.0),
         "is_playing": bool(live.song.is_playing),
-        "note": "Peak meter snapshot, approximate dBFS (about +-2 dB), "
+        "note": "Peak meter snapshot, dBFS = 76 * meter - 70, "
                 "not a loudness measurement.",
     }

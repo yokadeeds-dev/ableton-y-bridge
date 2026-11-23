@@ -136,7 +136,7 @@ Details, the list of what can be taken back, and the limits of all this:
 - **One selected track.** Live's API has no multi-selection.
 - **Levels, spectrum and loudness while the song plays** come from three sources:
   - Live's own meters, for every track at once: `get_track_levels` samples them for a
-    few seconds and converts them to approximate dBFS (post-fader, about ±2 dB; the
+    few seconds and converts them to dBFS (post-fader; the
     conversion was measured in Live, see `AbletonMCP_Remote_Script/handlers/meters.py`).
   - **Y Meter**, a Max for Live device for any track: RMS, peak and a five-band spectrum
     of that track ([m4l/README.md](m4l/README.md)).

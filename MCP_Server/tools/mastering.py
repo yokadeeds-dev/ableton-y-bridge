@@ -85,8 +85,8 @@ def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True)
 
     Samples Live's output meters of every track, return track and the master
     for a few seconds (about ten readings a second) and lists the highest and
-    the average reading per track in approximate dBFS (post-fader, about
-    +-2 dB; calibrated against Live's meter scale). Good for comparing tracks
+    the average reading per track in dBFS (post-fader; the conversion was
+    checked against sine tones of known level). Good for comparing tracks
     and spotting tracks that go over 0 dB; not a loudness measurement. Tracks
     that carry the "Y Meter" Max for Live device also show RMS, peak and the
     five-band spectrum measured where the device sits (usually pre-fader).
@@ -103,7 +103,7 @@ def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True)
     measured = analyzer.tracks()
     rows = [f"Track levels over {result['seconds']:.1f} s ({result['samples']} readings, "
             f"{'playing' if result.get('playing') else 'transport stopped'})",
-            "Live meter, post-fader: highest / average reading (approx. dBFS, +-2 dB)", ""]
+            "Live meter, post-fader: highest / average reading (dBFS)", ""]
     labels = {"track": lambda r: f"{r['index']:>3}", "return": lambda r: f"R{r['index']:<2}",
               "master": lambda r: "  M"}
     for row in result["tracks"]:

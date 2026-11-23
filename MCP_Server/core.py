@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -31,6 +32,21 @@ analyzer = AnalyzerFeed()
 
 # name -> {"zone": ..., "summary": ...}; filled by @tool, read by bridge_status
 TOOLS: Dict[str, dict] = {}
+
+
+def strict_json(value):
+    """Replace inf and nan (a fader at -inf dB, for example) with None.
+
+    JSON has no infinity; json.dumps would write -Infinity, which strict
+    parsers reject. None becomes null; display strings still say '-inf dB'.
+    """
+    if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+        return None
+    if isinstance(value, dict):
+        return {key: strict_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [strict_json(item) for item in value]
+    return value
 
 INSTRUCTIONS = (
     "Tools to control Ableton Live through a Remote Script. All track, clip, scene and "
@@ -124,7 +140,8 @@ def tool(zone: str = READ, unless: Callable = None) -> Callable:
                     if len(steps) > 8:
                         answer += f"; ... {len(steps) - 8} more"
             if isinstance(answer, (dict, list)):
-                return json.dumps(answer, indent=2, ensure_ascii=False, default=str)
+                return json.dumps(strict_json(answer), indent=2, ensure_ascii=False,
+                                  default=str, allow_nan=False)
             return answer
 
         def _run(function, name, args, kwargs):

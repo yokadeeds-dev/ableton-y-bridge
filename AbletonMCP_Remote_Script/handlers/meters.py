@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Output meters of every track, return track and the master, sampled over a window.
 
-Live's API exposes the same meters Live draws in the mixer (``output_meter_left``
-and ``output_meter_right``, 0.0 to 1.0). One reading is a single moment, so the
-command samples them on every display tick (about ten times a second) for a
-short window and reports the highest and the average reading per track,
-converted to approximate dBFS with a calibration measured in Live (below).
-Good for comparing tracks and spotting overloads; not a loudness measurement.
+Live's API exposes the meters Live draws in the mixer. ``output_meter_level``
+is the louder of ``output_meter_left`` and ``output_meter_right`` and holds a
+peak for about a second; left and right do not hold. The command reads
+``output_meter_level`` (falling back to the louder of left and right) on every
+display tick, about ten times a second, for a short window and reports the
+highest and the average reading per track in dBFS. Good for comparing tracks
+and spotting overloads; not a loudness measurement.
 """
 
 import time
@@ -17,21 +18,37 @@ from ..registry import READ, Bool, Float, Later, command
 
 MAX_SECONDS = 10.0
 
-# Live's meter scale is linear in dB. Measured against the Y Meter device in
-# Live 12.3.6 (fader steps from 0 to -40 dB, peaks from -13 to -53 dBFS):
-# meter = 0.01292 * dB + 0.9043, within about 2 dB. 0 dBFS is a reading of
-# about 0.90; 1.0 is about +7 dB, the top of Live's meters.
-METER_PER_DB = 0.01292
-METER_AT_0DB = 0.9043
+# Live's meter scale is linear in dB: dBFS = 76 * meter - 70 (the formula
+# Faderhand uses). Checked in Live 12.3.6 with 1 kHz sine files of known peak
+# level from 0 to -60 dBFS: every step within 0.01 dB, for output_meter_level,
+# left and right alike (conformance repository, calibration report 2026-11-23).
+# An earlier calibration against the Y Meter device was 0.4 to 1.3 dB off.
+DB_PER_METER = 76.0
+DB_AT_METER_ZERO = -70.0
+METER_AT_0DB = -DB_AT_METER_ZERO / DB_PER_METER  # 0.921
 METER_FLOOR = 0.01  # below this (about -69 dB) the meter counts as silent
 
 
 def meter_to_db(value):
-    """Approximate dBFS of a Live meter reading, or None for silence."""
+    """dBFS of a Live meter reading, or None for silence."""
     value = float(value)
     if value < METER_FLOOR:
         return None
-    return round((value - METER_AT_0DB) / METER_PER_DB, 1)
+    return round(DB_PER_METER * value + DB_AT_METER_ZERO, 1)
+
+
+def meter_of(track):
+    """The track's meter reading: output_meter_level, else the louder channel."""
+    level = peek(track, "output_meter_level", None)
+    if level is not None:
+        return float(level)
+    left = peek(track, "output_meter_left", None)
+    right = peek(track, "output_meter_right", None)
+    if left is None or right is None:
+        return None
+    return max(float(left), float(right))
+
+
 _KEY = "meter_sessions"
 MIN_GAP_S = 0.05  # two readings closer than this count as one
 
@@ -78,11 +95,9 @@ def get_track_meters(live, seconds, include_returns):
         for (_kind, _index, track), stat in zip(targets, stats):
             if not peek(track, "has_audio_output", True):
                 continue
-            left = peek(track, "output_meter_left", None)
-            right = peek(track, "output_meter_right", None)
-            if left is None or right is None:
+            value = meter_of(track)
+            if value is None:
                 continue
-            value = max(float(left), float(right))
             stat["peak"] = max(stat["peak"], value)
             stat["sum"] += value
             stat["n"] += 1
@@ -111,7 +126,7 @@ def get_track_meters(live, seconds, include_returns):
             "samples": taken[0],
             "playing": was_playing[0],
             "tracks": rows,
-            "note": "Live meter readings (0..1); dB values are approximate (about +-2 dB), "
+            "note": "Live meter readings (0..1, output_meter_level, holds peaks about 1 s); dBFS = 76 * meter - 70, "
                     "post-fader, mean over readings, not loudness.",
         }
 
