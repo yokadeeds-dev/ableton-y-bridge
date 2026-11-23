@@ -4,7 +4,7 @@
 
 Live's API exposes the same meters Live draws in the mixer (``output_meter_left``
 and ``output_meter_right``, 0.0 to 1.0). One reading is a single moment, so the
-command samples them on every display tick (five to ten times a second) for a
+command samples them on every display tick (about ten times a second) for a
 short window and reports the highest and the average reading per track,
 converted to approximate dBFS with a calibration measured in Live (below).
 Good for comparing tracks and spotting overloads; not a loudness measurement.
@@ -32,7 +32,17 @@ def meter_to_db(value):
     if value < METER_FLOOR:
         return None
     return round((value - METER_AT_0DB) / METER_PER_DB, 1)
-MAX_TICKS_PER_SECOND = 20  # safety cap; Live's display tick runs at about 5 to 10 per second
+_KEY = "meter_sessions"
+MIN_GAP_S = 0.05  # two readings closer than this count as one
+
+
+def sample_tick(live):
+    """Ticker: one reading for every running measurement, on every display tick."""
+    sessions = live.state.get(_KEY) or {}
+    for session in list(sessions.values()):
+        session()
+    if not sessions:
+        live.state.get("tickers", {}).pop(_KEY, None)
 
 
 def _targets(song, include_returns):
@@ -54,8 +64,15 @@ def get_track_meters(live, seconds, include_returns):
     stats = [{"peak": 0.0, "sum": 0.0, "n": 0, "over": 0} for _ in targets]
     started = time.time()
     was_playing = [bool(song.is_playing)]
+    taken = [0]
+    last = [0.0]
 
     def sample():
+        now = time.time()
+        if now - last[0] < MIN_GAP_S:
+            return
+        last[0] = now
+        taken[0] += 1
         if song.is_playing:
             was_playing[0] = True
         for (_kind, _index, track), stat in zip(targets, stats):
@@ -98,14 +115,22 @@ def get_track_meters(live, seconds, include_returns):
                     "post-fader, mean over readings, not loudness.",
         }
 
-    cap = max(1, int(seconds * MAX_TICKS_PER_SECOND))
-    taken = [0]
+    # The readings come from a ticker that runs on every display tick (about
+    # ten a second); a deferred result only gets a turn every second tick.
+    sessions = live.state.setdefault(_KEY, {})
+    key = "%d-%f" % (id(stats), started)
+    sessions[key] = sample
+    live.state.setdefault("tickers", {})[_KEY] = ("handlers.meters", "sample_tick")
+    sample()
 
-    def step():
-        sample()
-        taken[0] += 1
-        if time.time() - started >= seconds or taken[0] >= cap:
+    def check():
+        if time.time() - started >= seconds:
+            sessions.pop(key, None)
+            sample()
             return finish()
-        return Later(step, 1)
+        return Later(check, 1)
 
-    return step()
+    if seconds <= 0:
+        sessions.pop(key, None)
+        return finish()
+    return Later(check, 1)

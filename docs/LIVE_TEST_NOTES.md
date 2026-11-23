@@ -67,9 +67,12 @@ Run by hand against a throwaway Set in Live 12.3.6 (Wavetable chord clip playing
 track), not by `tests/live_protocol.py`:
 
 - `get_track_meters` read every track, both return tracks and the main track; MIDI tracks
-  without an instrument report no audio output. Live's display tick ran at about 5 per
-  second (2 s gave 10 to 11 readings), so the window is timed by the clock, not by
-  counting ticks.
+  without an instrument report no audio output. The first version read the meters from
+  a deferred result, which only gets a turn every second display tick (5 readings a
+  second) and caught peaks about 2 dB lower than Faderhand's `measure_levels`. It now
+  reads them from a ticker on every display tick: 31 readings in 3.1 s, and the peak of
+  the same track agreed with Faderhand within 0.4 dB, which is the difference of the two
+  meter formulas at that level.
 - **Y Meter** (`m4l/Y Meter.amxd`) loaded from the User Library on a track and on the
   main track, passed the audio and sent `/ytrack` frames five times a second; the track
   name arrives in quotes when it contains spaces (the server strips them).

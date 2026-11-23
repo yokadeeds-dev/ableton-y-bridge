@@ -514,7 +514,7 @@ class ToolTests(BridgeCase):
 
     def test_track_meters_sample_every_track(self):
         result = self.call("get_track_meters", seconds=0.3)
-        self.assertTrue(1 <= result["samples"] <= 6, result["samples"])
+        self.assertTrue(1 <= result["samples"] <= 8, result["samples"])  # at most one reading per 50 ms
         kinds = [row["kind"] for row in result["tracks"]]
         self.assertEqual(kinds.count("track"), len(SONG.tracks))
         self.assertEqual(kinds.count("return"), len(SONG.return_tracks))

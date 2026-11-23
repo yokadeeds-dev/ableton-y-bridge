@@ -84,7 +84,7 @@ def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True)
     """Levels of all tracks side by side while the song plays.
 
     Samples Live's output meters of every track, return track and the master
-    for a few seconds (five to ten readings a second) and lists the highest and
+    for a few seconds (about ten readings a second) and lists the highest and
     the average reading per track in approximate dBFS (post-fader, about
     +-2 dB; calibrated against Live's meter scale). Good for comparing tracks
     and spotting tracks that go over 0 dB; not a loudness measurement. Tracks
