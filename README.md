@@ -114,6 +114,15 @@ variables; see [.env.example](.env.example). No keys or accounts are needed.
 - **Journal.** Every change made through the bridge gets a number, shown in the tool
   answer (`Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB`). `list_ai_changes`
   shows the list.
+- **Answers as JSON.** Every tool that changes something also takes `as_json=true`. It then
+  answers with `ok`, the target `ref` (`track:N`, `return:N`, `master`, or `null` for
+  song-wide changes; `clip`, `device`, `scene` where given), the state afterwards in
+  `now`, the text in `message` and the `journal` numbers. Errors and refusals read
+  `{"ok": false, "error": ..., "code": ...}`. Without the switch the answer stays text.
+- **Untitled Sets.** The first change in a Set that has no file yet carries a note
+  (`Note: This Set has no file yet. ...`, in JSON the field `notice`): the steps can be
+  taken back one by one while Live runs, but not after a crash or restart, and there is
+  no saved state to go back to. The assistant is asked to suggest saving first.
 - **Single-step undo.** `undo_ai_change(12)` takes back exactly step 12 and leaves
   every other step alone. If you changed the same thing in Live since, your setting
   stays and the tool says so.
@@ -140,6 +149,13 @@ Details, the list of what can be taken back, and the limits of all this:
   - Live's own meters, for every track at once: `get_track_levels` samples them for a
     few seconds and converts them to dBFS (post-fader; the
     conversion was measured in Live, see `AbletonMCP_Remote_Script/handlers/meters.py`).
+    With `as_json=true` it answers in JSON: `peak_dbfs` and `mean_dbfs` per `track:N`,
+    `return:N` and `master` (`null` for silence) and the number of readings.
+    Only readings while the transport runs and more than 3.5 s after the last stop
+    count: after a stop Live's meter keeps the last peak for about 3 s, also if playback
+    starts again. `readings_stopped` and `readings_held` say how many readings were taken
+    with the transport stopped or within 3.5 s of a stop; if there are no others, those
+    are used (`playing: false` or `held_only: true`).
   - **Y Meter**, a Max for Live device for any track: RMS, peak and a five-band spectrum
     of that track ([m4l/README.md](m4l/README.md)).
   - The WASAPI analyzer for the whole mix: loudness (approximate LUFS) and spectrum of

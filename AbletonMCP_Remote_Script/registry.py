@@ -226,6 +226,9 @@ class Registry(object):
 
     def __init__(self):
         self._specs = {}
+        # key -> (module, function): callbacks that run on every display tick
+        # for as long as the bridge runs (see `ticker`)
+        self.tickers = {}
 
     def add(self, spec):
         if spec.name in self._specs:
@@ -265,6 +268,21 @@ def collect_into(registry):
 
 def current_target():
     return _target[0]
+
+
+def ticker(key):
+    """Decorator for a function ``f(live)`` that runs on every display tick.
+
+    The hub starts it with the bridge and keeps it through hot reloads (by
+    module and function name, like the tickers handlers start themselves).
+    Keep it cheap: it runs about ten times a second.
+    """
+    def register(function):
+        module = function.__module__.split(".", 1)[-1]  # relative to the package
+        _target[0].tickers[key] = (module, function.__name__)
+        return function
+
+    return register
 
 
 def command(name, zone, summary, params=(), undo=None, timeout=10.0, aliases=(),

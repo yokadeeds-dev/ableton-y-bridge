@@ -80,6 +80,8 @@ class LiveLink:
         # Set by the tool wrapper for the duration of one tool call:
         self.confirmed = False          # the user agreed to a destructive tool
         self.journal: Optional[list] = None   # collects journal entries of replies
+        self.results: Optional[list] = None   # collects the result dicts of replies
+        self.notices: Optional[list] = None   # collects notices of replies (D18)
         self._pacer = Pacer(
             rate=float(os.environ.get("ABLETON_MCP_EDIT_RATE", "5")),
             burst=int(os.environ.get("ABLETON_MCP_EDIT_BURST", "8")),
@@ -113,6 +115,13 @@ class LiveLink:
         result = reply.get("result", {})
         if self.journal is not None and isinstance(result, dict):
             self.journal.extend(result.get("journal") or [])
+        if self.notices is not None and isinstance(result, dict) and result.get("notice"):
+            self.notices.append(str(result["notice"]))
+        # results of writes only: a journal note or a look-up is no read-back
+        if (self.results is not None and isinstance(result, dict)
+                and command != "note_change" and spec is not None
+                and spec.get("zone") != "read"):
+            self.results.append(result)
         return result
 
     def commands(self) -> Dict[str, dict]:

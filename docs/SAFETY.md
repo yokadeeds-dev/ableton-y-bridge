@@ -134,3 +134,7 @@ back; older ones keep their text.
 - **`eval_code`** stays switched off unless `allow_eval.flag` exists next to the
   installed script, and it is destructive on top of that.
 - It is not a tamper-proof audit log: the journal file is a plain text file.
+- **Untitled Sets.** Changes are allowed in a Set that has no file yet, but the
+  journal's undo lives only in memory and there is no saved state to fall back on.
+  The first change there carries a notice (`Note: ...` in text, `notice` in JSON)
+  that says so; it comes again after a change in a saved Set.

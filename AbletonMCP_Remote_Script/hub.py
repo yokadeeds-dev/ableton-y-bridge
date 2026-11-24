@@ -30,6 +30,7 @@ class Hub(object):
         self._swap_lock = threading.Lock()
         self._loaded = reloader.load()
         self.state["core_hash_at_start"] = self._loaded.core_hash
+        self._start_tickers()
 
     # -- register access ---------------------------------------------------
 
@@ -47,7 +48,14 @@ class Hub(object):
         with self._swap_lock:
             self._loaded = fresh
             self.reload_count += 1
+        self._start_tickers()
         return fresh
+
+    def _start_tickers(self):
+        """Enter the tickers the handlers declared with ``registry.ticker``."""
+        declared = getattr(self._loaded.registry, "tickers", {})
+        if declared:
+            self.state.setdefault("tickers", {}).update(declared)
 
     def context(self):
         return self._loaded.context_class(self.surface, self)

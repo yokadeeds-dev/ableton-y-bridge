@@ -8,7 +8,7 @@ import time
 
 from .. import winkeys
 from ..coerce import BoolLike, FloatLike, IntLike, ListLike, to_bool, to_float, to_int, to_list
-from ..core import READ, REVERSIBLE, live, note_outside_change, tool
+from ..core import READ, REVERSIBLE, NotDone, ReadBack, live, note_outside_change, tool
 
 
 @tool(READ)
@@ -148,8 +148,9 @@ def group_tracks(track_indices: ListLike) -> str:
     try:
         winkeys.type_into_live(keys, pause=0.12)
     except winkeys.KeysUnavailable as problem:
-        return (f"Not grouped: {problem}. Track {prepared['first_index']} is selected in "
-                "Live; select the others with Shift and press Ctrl+G there.")
+        return NotDone(f"Not grouped: {problem}. Track {prepared['first_index']} is selected "
+                       "in Live; select the others with Shift and press Ctrl+G there.",
+                       "keys_unavailable")
     time.sleep(0.6)
     after = live.call("get_session_info")
     first = prepared["first_index"]
@@ -158,10 +159,14 @@ def group_tracks(track_indices: ListLike) -> str:
         note_outside_change(f"Grouped {prepared['count']} tracks "
                             f"({', '.join(prepared['track_names'])}) with Ctrl+G",
                             undo="live_undo")
-        return (f"Grouped {prepared['count']} tracks ({', '.join(prepared['track_names'])}) "
-                f"into '{row['name']}' at index {first}. Later tracks moved down by one.")
-    return ("Shortcut sent, but no Group Track appeared at index "
-            f"{first}. Check Live: the keys may have gone to another part of the window.")
+        return ReadBack(
+            f"Grouped {prepared['count']} tracks ({', '.join(prepared['track_names'])}) "
+            f"into '{row['name']}' at index {first}. Later tracks moved down by one.",
+            {"index": first, "name": row["name"], "kind": row["kind"],
+             "track_count": after["track_count"]})
+    return NotDone("Shortcut sent, but no Group Track appeared at index "
+                   f"{first}. Check Live: the keys may have gone to another part of the window.",
+                   "not_grouped")
 
 
 @tool(READ)

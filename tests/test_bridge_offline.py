@@ -526,6 +526,144 @@ class ToolTests(BridgeCase):
         without = self.call("get_track_meters", seconds=0, include_returns=False)
         self.assertNotIn("return", [row["kind"] for row in without["tracks"]])
 
+    def test_track_meters_leave_out_readings_after_a_stop(self):
+        """D16: after a stop Live's meter holds the last peak for ~3 s; those readings don't count."""
+        track = SONG.tracks[0]
+        before = (track.output_meter_left, SONG.is_playing)
+
+        def stop_and_hold():
+            time.sleep(0.2)
+            SONG.is_playing = False
+            # a reading that saw the transport running is over long before this
+            time.sleep(0.1)
+            track.output_meter_left = 0.9  # what a reading after the stop would show
+
+        try:
+            SONG.is_playing = True
+            stopper = threading.Thread(target=stop_and_hold)
+            stopper.start()
+            result = self.call("get_track_meters", seconds=0.6)
+            stopper.join()
+            self.assertEqual(result["tracks"][0]["meter_peak"], 0.5)  # 0.9 came after the stop
+            self.assertTrue(result["playing"])
+            self.assertGreaterEqual(result["stopped_samples"], 1)
+            self.assertGreaterEqual(result["samples"], 1)
+            # never playing: the stopped readings are all there is, and they say so
+            idle = self.call("get_track_meters", seconds=0.2)
+            self.assertFalse(idle["playing"])
+            self.assertEqual(idle["samples"], idle["stopped_samples"])
+            self.assertEqual(idle["tracks"][0]["meter_peak"], 0.9)
+            text = self.ok(mastering.get_track_levels(0.2))
+            self.assertIn("transport stopped", text)
+            self.assertIn("still holds the last peak", text)
+            data = json.loads(self.ok(mastering.get_track_levels(0.2, as_json=True)))
+            self.assertEqual((data["playing"], data["readings"]), (False, data["readings_stopped"]))
+        finally:
+            track.output_meter_left, SONG.is_playing = before
+
+    def test_track_meters_leave_out_the_held_peak_after_a_restart(self):
+        """D17: a start within the hold time after a stop does not clear Live's held peak."""
+        meters = sys.modules[script.__name__ + ".handlers.meters"]
+        track = SONG.tracks[0]
+        before = (track.output_meter_left, SONG.is_playing, getattr(meters, "HOLD_S", 3.5))
+        meters.HOLD_S = 1.0  # Live: 3.5 s
+        try:
+            SONG.is_playing = True
+            time.sleep(0.15)                 # the ticker sees the transport running
+            SONG.is_playing = False
+            stopped = time.time()
+            time.sleep(0.15)                 # ... and the stop
+            track.output_meter_left = 0.9    # the peak Live holds after the stop
+            SONG.is_playing = True           # started again within the hold time
+            result = self.call("get_track_meters", seconds=0.15)
+            self.assertTrue(result.get("held_only"), result)
+            self.assertTrue(result["playing"])
+            self.assertGreaterEqual(result["held_samples"], 1)
+            self.assertEqual(result["tracks"][0]["meter_peak"], 0.9)  # nothing else there
+            text = self.ok(mastering.get_track_levels(0.1))
+            self.assertIn("may still show the peak held from before", text)
+
+            def fade():                      # the held peak is gone after the hold time
+                time.sleep(max(0.0, stopped + 0.3 - time.time()))
+                track.output_meter_left = 0.5
+            fader = threading.Thread(target=fade)
+            fader.start()
+            result = self.call("get_track_meters", seconds=1.0)
+            fader.join()
+            self.assertEqual(result["tracks"][0]["meter_peak"], 0.5)  # 0.9 was held, left out
+            self.assertFalse(result["held_only"])
+            self.assertGreaterEqual(result["held_samples"], 1)
+            data = json.loads(self.ok(mastering.get_track_levels(0.1, as_json=True)))
+            self.assertEqual((data["held_only"], data["readings_held"]), (False, 0))
+        finally:
+            track.output_meter_left, SONG.is_playing, meters.HOLD_S = before
+            self.surface._hub.state.pop("transport_state", None)  # no stop left for other tests
+        # the watch runs with the bridge, so stops between measurements count too
+        tickers = self.surface._hub.state.get("tickers", {})
+        self.assertEqual(tickers.get("transport_watch"), ("handlers.meters", "transport_tick"))
+
+    def test_untitled_set_notice_once(self):
+        """D18: the first change in an untitled Set says that only undo_ai_change protects it."""
+        state = self.surface._hub.state
+        before = (SONG.file_path, state.get("untitled_notice_given"))
+        try:
+            SONG.file_path = ""
+            state.pop("untitled_notice_given", None)
+            first = self.ok(tracks.set_track_volume(1, -3))
+            self.assertIn("\nNote: This Set has no file yet.", first)
+            self.assertLess(first.index("Journal: #"), first.index("Note:"))
+            self.assertNotIn("Note:", self.ok(tracks.set_track_volume(1, -2)))   # once
+            self.assertNotIn("Note:", self.ok(session.get_session_info()))       # reads never
+            SONG.file_path = r"C:\Sets\Song.als"
+            self.assertNotIn("Note:", self.ok(tracks.set_track_volume(1, -1)))   # saved Set
+            SONG.file_path = ""                                                 # a new untitled Set
+            data = json.loads(tracks.set_track_volume(1, 0, as_json=True))
+            self.assertTrue(data["notice"].startswith("This Set has no file yet."))
+            self.assertNotIn("notice", data["now"])
+        finally:
+            SONG.file_path = before[0]
+            state.pop("untitled_notice_given", None)
+            if before[1]:
+                state["untitled_notice_given"] = before[1]
+
+    def test_untitled_notice_reads_the_set_on_the_main_thread(self):
+        """D18: Song.file_path is read through the gate only, never on a socket thread."""
+        threads = []
+        song_class = type(SONG)
+        kept = SONG.__dict__.pop("file_path")
+
+        def read(song):
+            threads.append(threading.current_thread() is self.pump)  # Live's main thread here
+            return ""
+        song_class.file_path = property(read)
+        state = self.surface._hub.state
+        given = state.pop("untitled_notice_given", None)
+        try:
+            self.assertIn("Note:", self.ok(tracks.set_track_volume(1, -3)))
+            time.sleep(0.3)                  # some ticker rounds
+            self.assertTrue(threads)
+            self.assertTrue(all(threads), threads)
+        finally:
+            del song_class.file_path
+            SONG.file_path = kept
+            state.pop("untitled_notice_given", None)
+            if given:
+                state["untitled_notice_given"] = given
+
+    def test_tickers_do_not_settle_the_journal_file(self):
+        """D17: the lasting transport ticker must not fix the journal folder before a command."""
+        access = sys.modules[self.surface._hub.loaded.context_class.__module__]
+        journal = access.journal              # the copy the loaded context class uses
+        calls, original = [], journal.prepare
+        journal.prepare = lambda *a: calls.append(a)
+        try:
+            time.sleep(0.3)                  # ticker rounds only
+            self.assertEqual(calls, [])
+            self.ok(tracks.set_track_volume(1, -3))
+            self.assertTrue(calls)           # commands do
+        finally:
+            journal.prepare = original
+
     def test_track_levels_with_y_meter_frame(self):
         name = SONG.tracks[0].name
         core.analyzer.accept(_osc("/ytrack", name, 0.1, 0.5, 0.05, 0.02, 0.01, 0.005, 0.0))
@@ -537,6 +675,252 @@ class ToolTests(BridgeCase):
             core.analyzer._tracks.clear()
         self.assertIn("put the \"Y Meter\"", self.ok(mastering.get_track_levels(0)))
         self.assertTrue(mastering.get_track_levels(11).startswith("Error"))
+
+    def test_track_levels_as_json(self):
+        name = SONG.tracks[0].name
+        core.analyzer.accept(_osc("/ytrack", name, 0.1, 0.5, 0.05, 0.02, 0.01, 0.005, 0.0))
+        try:
+            data = json.loads(self.ok(mastering.get_track_levels(0.2, as_json=True)))
+        finally:
+            with core.analyzer._lock:
+                core.analyzer._tracks.clear()
+        self.assertGreaterEqual(data["readings"], 1)
+        refs = [entry["ref"] for entry in data["tracks"]]
+        self.assertEqual(refs[0], "track:0")
+        self.assertEqual(refs[-1], "master")
+        self.assertIn("return:0", refs)
+        first = data["tracks"][0]
+        self.assertEqual(first["peak_dbfs"], -32.0)  # 76 * 0.5 - 70
+        self.assertEqual(first["meter_peak"], 0.5)
+        self.assertEqual(first["y_meter"]["peak_dbfs"], -6.0)
+        self.assertNotIn("air", first["y_meter"]["bands_db"])  # silent band left out
+        without = json.loads(self.ok(mastering.get_track_levels(0, include_returns="false", as_json="true")))
+        self.assertFalse(any(ref.startswith("return:") for ref in (e["ref"] for e in without["tracks"])))
+        self.assertTrue(mastering.get_track_levels(0, as_json="maybe").startswith("Error"))
+
+    def test_write_as_json(self):
+        """Spec § 4 (D15): every write can answer JSON with ref, read-back and journal."""
+        before = tracks.set_track_volume(1, -3)
+        self.assertFalse(before.lstrip().startswith("{"))          # text stays the default
+        data = json.loads(tracks.set_track_volume(1, -6, as_json=True))
+        self.assertIs(data["ok"], True)
+        self.assertEqual(data["ref"], "track:1")
+        self.assertEqual(data["now"]["display"], "-6.0 dB")
+        self.assertNotIn("journal", data["now"])
+        self.assertTrue(data["journal"] and data["journal"][0]["n"])
+        self.assertIn("fader at -6.0 dB", data["message"])
+        tracks.set_track_volume(1, 0)
+        data = json.loads(tracks.set_return_track_volume(0, 0.7, as_json="true"))
+        self.assertEqual(data["ref"], "return:0")
+        data = json.loads(devices.set_device_parameter(0, 0, "Device On", 1, use_master=True,
+                                                       as_json=True))
+        self.assertEqual((data["ok"], data["ref"], data["device"]), (True, "master", 0))
+        data = json.loads(devices.set_device_parameter(0, 0, "Ceiling", 0, use_master=True,
+                                                       as_json=True))
+        self.assertEqual((data["code"], data["details"]["available"][0]), ("not_found", "Device On"))
+        data = json.loads(session.set_tempo(124, as_json=True))
+        self.assertIsNone(data["ref"])
+        session.set_tempo(120)
+        # errors: structured, with a code
+        data = json.loads(tracks.set_track_volume(99, -6, as_json=True))
+        self.assertEqual((data["ok"], data["code"]), (False, "out_of_range"))
+        self.assertTrue(data["error"])
+        data = json.loads(arrangement.clear_locators(as_json=True))
+        self.assertEqual(data["code"], "needs_confirmation")
+        os.environ["ABLETON_MCP_MAX_ZONE"] = "read"
+        try:
+            data = json.loads(tracks.set_track_name(2, "Nope", as_json=True))
+            self.assertEqual(data["code"], "zone_not_allowed")
+        finally:
+            os.environ.pop("ABLETON_MCP_MAX_ZONE")
+        self.assertTrue(tracks.set_track_mute(0, False, as_json="maybe").startswith("Error"))
+
+    def test_write_as_json_through_mcp(self):
+        """The switch reaches the tool through FastMCP's argument model."""
+        import asyncio
+        listed = {t.name: t for t in asyncio.run(core.mcp.list_tools())}
+        writes = [n for n, info in core.TOOLS.items() if info["zone"] != core.READ]
+        self.assertTrue(all("as_json" in listed[n].inputSchema["properties"] for n in writes))
+        reads = [n for n, info in core.TOOLS.items()
+                 if info["zone"] == core.READ and n != "get_track_levels"]  # D14 has its own
+        self.assertEqual([n for n in reads if "as_json" in listed[n].inputSchema["properties"]], [])
+        reply = asyncio.run(core.mcp.call_tool("set_track_mute",
+                                               {"track_index": 0, "mute": False, "as_json": True}))
+        blocks = reply[0] if isinstance(reply, tuple) else reply
+        data = json.loads(blocks[0].text)
+        self.assertEqual((data["ok"], data["ref"], data["now"]["mute"]), (True, "track:0", False))
+
+    # tool -> (arguments, Live results, expected target); defaults are filled in
+    # the way the wrapper does it, so tools called without track_index count too
+    WRITE_TARGETS = {
+        "als_warp_write": ({"als_path": "x.als"}, [], {"ref": None, "file": "x.als"}),
+        "als_warp_derive": ({"als_path": "x.als"}, [], {"ref": None, "file": "x.als"}),
+        "set_tempo_automation": ({"als_path": "x.als"}, [], {"ref": None, "file": "x.als"}),
+        "set_wavetable_mod_routing": ({"als_path": "x.als"}, [], {"ref": None, "file": "x.als"}),
+        "snapshot_session": ({}, [], {"ref": None}),
+        "set_clip_warp_mode": ({"track_index": 1, "clip_index": 2}, [],
+                               {"ref": "track:1", "clip": 2}),
+        "set_warp_marker": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "set_warp_markers_batch": ({"track_index": "1", "clip_index": 2}, [],
+                                   {"ref": "track:1", "clip": 2}),
+        "create_locator": ({"time": 4}, [], {"ref": None}),
+        "delete_locator": ({"index": 0}, [], {"ref": None}),
+        "clear_locators": ({}, [], {"ref": None}),
+        "create_clip": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "set_clip_name": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "fire_clip": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "stop_clip": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "add_notes_to_clip": ({"track_index": 1, "clip_index": 2}, [],
+                              {"ref": "track:1", "clip": 2}),
+        "replace_notes_in_clip": ({"track_index": 1, "clip_index": 2}, [],
+                                  {"ref": "track:1", "clip": 2}),
+        "delete_notes_from_clip": ({"track_index": 1, "clip_index": 2}, [],
+                                   {"ref": "track:1", "clip": 2}),
+        "humanize_clip": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "transpose_notes": ({"track_index": 1, "clip_index": 2}, [],
+                            {"ref": "track:1", "clip": 2}),
+        "normalize_clip": ({"track_index": 1, "clip_index": 2}, [], {"ref": "track:1", "clip": 2}),
+        "generate_euclidean_rhythm": ({"track_index": 1, "clip_index": 2}, [],
+                                      {"ref": "track:1", "clip": 2}),
+        "load_instrument_or_effect": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "load_device_on_master": ({}, [], {"ref": "master"}),
+        "load_device_on_return": ({"return_index": 1}, [], {"ref": "return:1"}),
+        "load_drum_kit": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "set_device_parameter": ({"track_index": 1, "device_index": 2}, [],
+                                 {"ref": "track:1", "device": 2}),
+        "set_return_device_parameter": ({"return_index": 1, "device_index": 0}, [],
+                                        {"ref": "return:1", "device": 0}),
+        "delete_device": ({"track_index": 1, "device_index": 2, "use_return": "true",
+                           "return_index": 1}, [], {"ref": "return:1", "device": 2}),
+        "set_eq_mode": ({"track_index": 0, "device_index": 3, "use_master": True}, [],
+                        {"ref": "master", "device": 3}),
+        "set_sidechain_routing": ({"target_track_index": 2, "device_index": 0}, [],
+                                  {"ref": "track:2", "device": 0}),
+        "color_track_by_spectrum": ({}, [], {"ref": "track:0"}),          # default track 0
+        "color_all_tracks_by_spectrum": ({}, [], {"ref": None}),
+        "undo_ai_change": ({"number": 3}, [], {"ref": None}),
+        "set_tempo": ({"tempo": 120}, [], {"ref": None}),
+        "start_playback": ({}, [], {"ref": None}),
+        "stop_playback": ({}, [], {"ref": None}),
+        "undo": ({}, [], {"ref": None}),
+        "redo": ({}, [], {"ref": None}),
+        "set_arrangement_record": ({"enabled": True}, [], {"ref": None}),
+        "fire_scene": ({"scene_index": 3}, [], {"ref": None, "scene": 3}),
+        "set_scene_tempo": ({"scene_index": 3}, [], {"ref": None, "scene": 3}),
+        "jump_to_time": ({"time": 8}, [], {"ref": None}),
+        "set_arrangement_loop": ({"start": 0, "length": 4}, [], {"ref": None}),
+        "create_midi_track": ({}, [{"index": 3}], {"ref": "track:3"}),     # Live picks it
+        "create_audio_track": ({"index": 0}, [{"index": 0}], {"ref": "track:0"}),
+        "set_track_name": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "set_track_volume": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "set_track_mute": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "set_track_color": ({"track_index": 1}, [], {"ref": "track:1"}),
+        "set_track_send": ({"track_index": 1, "send_index": 0}, [], {"ref": "track:1"}),
+        "group_tracks": ({"track_indices": "[1, 2]"}, [{"first_index": 1}],
+                         {"ref": "track:1", "tracks": ["track:1", "track:2"]}),
+        "set_return_track_volume": ({"index": 1}, [], {"ref": "return:1"}),
+    }
+    MORE_TARGETS = [  # flags that move the target
+        ("set_device_parameter", {"track_index": 1, "device_index": 0, "use_master": "true"},
+         {"ref": "master", "device": 0}),
+        ("delete_device", {"track_index": 1, "device_index": 0, "use_master": True},
+         {"ref": "master", "device": 0}),
+        ("delete_device", {"track_index": 1, "device_index": 0}, {"ref": "track:1", "device": 0}),
+        ("set_sidechain_routing", {"target_track_index": 2, "device_index": 0,
+                                   "use_master_target": True}, {"ref": "master", "device": 0}),
+        ("set_sidechain_routing", {"target_track_index": 2, "device_index": 0,
+                                   "use_return_target": True, "return_target_index": 1},
+         {"ref": "return:1", "device": 0}),
+        ("set_device_parameter", {"track_index": "master", "device_index": 0},
+         {"ref": "master", "device": 0}),
+        ("create_midi_track", {}, {"ref": None}),        # no Live result, no guess
+    ]
+
+    def _target(self, name, given, results=()):
+        import inspect
+        from MCP_Server.tools import alsfile as alsfile_tools
+        module = next(m for m in (arrangement, clips, devices, mastering, safety, session,
+                                  tracks, alsfile_tools) if hasattr(m, name))
+        bound = inspect.signature(getattr(module, name)).bind_partial(**given)
+        bound.apply_defaults()
+        return core.write_target(name, dict(bound.arguments), list(results))
+
+    def test_write_targets_of_every_write_tool(self):
+        writes = {n for n, info in core.TOOLS.items() if info["zone"] != core.READ}
+        self.assertEqual(set(self.WRITE_TARGETS), writes)
+        for name, (given, results, expected) in self.WRITE_TARGETS.items():
+            with self.subTest(name):
+                self.assertEqual(self._target(name, given, results), expected)
+        for name, given, expected in self.MORE_TARGETS:
+            with self.subTest(name, **{k: str(v) for k, v in given.items()}):
+                self.assertEqual(self._target(name, given), expected)
+
+    def test_write_as_json_outcomes(self):
+        # the wrapper fills defaults: color_track_by_spectrum without track_index is track 0
+        data = json.loads(mastering.color_track_by_spectrum(dry_run=True, as_json=True))
+        self.assertEqual(data["ref"], "track:0")
+        data = json.loads(tracks.set_track_volume(99, 0, as_json=True))  # errors name it too
+        self.assertEqual((data["ok"], data["ref"]), (False, "track:99"))
+        # the target of a new track comes from Live
+        data = json.loads(tracks.create_midi_track(-1, as_json=True))
+        self.assertEqual(data["ref"], f"track:{data['now']['index']}")
+        self.ok(session.undo())
+        # a write that did not happen keeps its text but is ok: false in JSON
+        def no_keys(*_args, **_kwargs):
+            raise tracks.winkeys.KeysUnavailable("no Live window")
+        typing, tracks.winkeys.type_into_live = tracks.winkeys.type_into_live, no_keys
+        try:
+            text = tracks.group_tracks("[0, 1]")
+            data = json.loads(tracks.group_tracks("[0, 1]", as_json=True))
+        finally:
+            tracks.winkeys.type_into_live = typing
+        self.assertIs(type(text), str)
+        self.assertTrue(text.startswith("Not grouped: no Live window. Track 0 is selected"), text)
+        self.assertEqual((data["ok"], data["code"], data["ref"], data["tracks"]),
+                         (False, "keys_unavailable", "track:0", ["track:0", "track:1"]))
+        self.assertEqual(data["error"], text)
+        # success: the read-back is the Group Track found afterwards, not the preparation
+        def group(*_args, **_kwargs):
+            folder = fake_live.FakeTrack("Group 1", midi=False, slots=0)
+            folder.is_foldable = True
+            SONG.tracks.insert(0, folder)
+        typing, tracks.winkeys.type_into_live = tracks.winkeys.type_into_live, group
+        count = len(SONG.tracks)
+        try:
+            text = tracks.group_tracks("[0, 1]")
+            SONG.tracks.pop(0)
+            data = json.loads(tracks.group_tracks("[0, 1]", as_json=True))
+        finally:
+            tracks.winkeys.type_into_live = typing
+            SONG.tracks.pop(0)
+        self.assertIs(type(text), str)
+        self.assertTrue(text.startswith("Grouped 2 tracks"), text)
+        self.assertEqual(data["message"].split("\n")[0], text.split("\n")[0])
+        self.assertEqual((data["ok"], data["ref"]), (True, "track:0"))
+        self.assertEqual(data["now"], {"index": 0, "name": "Group 1", "kind": "group",
+                                       "track_count": count + 1})
+        # an index that is no number gives no reference
+        data = json.loads(tracks.set_track_volume("abc", 0, as_json=True))
+        self.assertEqual((data["ok"], data["code"], data["ref"]), (False, "bad_input", None))
+        # a journal note is no read-back, a look-up neither
+        data = json.loads(tracks.set_track_volume(0, 0, as_json=True))
+        self.assertNotIn("noted", data["now"])
+
+    def test_lock_texts_unchanged(self):
+        """Criterion: without as_json the refusals read word for word as before D15."""
+        self.assertEqual(
+            arrangement.clear_locators(),
+            "Not executed [needs_confirmation]: clear_locators is destructive "
+            f"({core.TOOLS['clear_locators']['summary']}). Ask the user; if they agree, "
+            "call it again with confirm=true.")
+        os.environ["ABLETON_MCP_MAX_ZONE"] = "read"
+        try:
+            self.assertEqual(
+                tracks.set_track_name(2, "Nope"),
+                "Not executed [zone_not_allowed]: set_track_name is a reversible tool and this "
+                "server is limited to 'read' (ABLETON_MCP_MAX_ZONE). Ask the user before going on.")
+        finally:
+            os.environ.pop("ABLETON_MCP_MAX_ZONE")
 
 
 def _osc(address, *values):

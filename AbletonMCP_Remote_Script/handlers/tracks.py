@@ -362,7 +362,9 @@ def get_master_levels(live):
     master = live.song.master_track
     left = float(master.output_meter_left)
     right = float(master.output_meter_right)
-    level = meter_of(master)  # output_meter_level: the louder side, holds peaks about 1 s
+    # output_meter_level: the louder side; holds peaks, after a stop for about 3 s,
+    # so a momentary reading while stopped can still show the last peak
+    level = meter_of(master)
     return {
         "meter_left": round(left, 4),
         "meter_right": round(right, 4),

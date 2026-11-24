@@ -211,7 +211,7 @@ class FakeSongView(object):
 class FakeSong(object):
     def __init__(self):
         self.name = "Test Set"
-        self.file_path = ""
+        self.file_path = "C:/Sets/Test Set.als"  # saved; the D18 test makes it untitled
         self.tempo = 120.0
         self.signature_numerator = 4
         self.signature_denominator = 4

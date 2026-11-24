@@ -79,8 +79,42 @@ def _db(value) -> str:
     return "silent" if value is None else f"{value:6.1f} dB"
 
 
+_REFS = {"track": lambda r: f"track:{r['index']}", "return": lambda r: f"return:{r['index']}",
+         "master": lambda r: "master"}
+
+
+def _levels_json(result: dict, measured: dict) -> dict:
+    """get_track_meters as JSON in the form of the shared spec (section 5).
+
+    References as in section 2 (track:N, return:N, master); dBFS values are
+    null for silence; the number of readings comes with the result.
+    """
+    tracks = []
+    for row in result["tracks"]:
+        entry = {"ref": _REFS[row["kind"]](row), "name": row["name"],
+                 "audio_output": bool(row.get("audio_output"))}
+        if entry["audio_output"]:
+            entry.update({"peak_dbfs": row.get("peak_db"), "mean_dbfs": row.get("mean_db"),
+                          "meter_peak": row.get("meter_peak"), "meter_mean": row.get("meter_mean"),
+                          "over_0db": row.get("over_0db", 0)})
+        frame = measured.get(row["name"])
+        if frame:
+            entry["y_meter"] = {"rms_db": frame.get("rms_db"), "peak_dbfs": frame.get("peak_db"),
+                                "bands_db": {band: frame["bands"][band] for band in BAND_ORDER
+                                             if frame.get("bands", {}).get(band, -999.0) > BAND_FLOOR_DB}}
+        tracks.append(entry)
+    return {"seconds": result["seconds"], "readings": result["samples"],
+            "readings_stopped": result.get("stopped_samples", 0),
+            "readings_held": result.get("held_samples", 0),
+            "held_only": bool(result.get("held_only")),
+            "hold_s": result.get("hold_s", 3.5),
+            "playing": bool(result.get("playing")), "source": "output_meter_level",
+            "post_fader": True, "formula": "dBFS = 76 * meter - 70", "tracks": tracks}
+
+
 @tool(READ)
-def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True) -> str:
+def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True,
+                     as_json: BoolLike = False) -> str:
     """Levels of all tracks side by side while the song plays.
 
     Samples Live's output meters of every track, return track and the master
@@ -94,15 +128,35 @@ def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True)
 
     - seconds: sampling window in seconds, 0 to 10 (default 2)
     - include_returns: also list the return tracks (default true)
+    - as_json: answer as JSON instead of text (default false): references
+      track:N, return:N and master, peak_dbfs and mean_dbfs (null for
+      silence), the number of readings, and the Y Meter values where present
+
+    Only readings while the transport runs and more than 3.5 s after the
+    last stop count: Live's meter holds the last peak for about 3 s after a
+    stop, also if playback starts again. Left-out readings are counted
+    apart. If there are no others, those count and the answer says so.
     """
     window = to_float(seconds, "seconds")
     if not 0.0 <= window <= 10.0:
         raise ValueError("seconds must be between 0 and 10")
+    want_json = to_bool(as_json, "as_json")
     result = live.call("get_track_meters", seconds=window,
                        include_returns=to_bool(include_returns, "include_returns"))
     measured = analyzer.tracks()
+    if want_json:
+        return _levels_json(result, measured)
+    stopped = result.get("stopped_samples", 0)
+    held = result.get("held_samples", 0)
+    hold = result.get("hold_s", 3.5)
+    skipped = []
+    if result.get("playing") and stopped:
+        skipped.append(f"{stopped} with the transport stopped")
+    if held and not result.get("held_only"):
+        skipped.append(f"{held} within {hold:g} s of a stop")
+    left_out = f", left out: {' and '.join(skipped)}" if skipped else ""
     rows = [f"Track levels over {result['seconds']:.1f} s ({result['samples']} readings, "
-            f"{'playing' if result.get('playing') else 'transport stopped'})",
+            f"{'playing' if result.get('playing') else 'transport stopped'}{left_out})",
             "Live meter, post-fader: highest / average reading (dBFS)", ""]
     labels = {"track": lambda r: f"{r['index']:>3}", "return": lambda r: f"R{r['index']:<2}",
               "master": lambda r: "  M"}
@@ -121,8 +175,13 @@ def get_track_levels(seconds: FloatLike = 2.0, include_returns: BoolLike = True)
                               if frame["bands"].get(band, -999.0) > BAND_FLOOR_DB)
             rows.append(f"       Y Meter: RMS {frame['rms_db']:.1f} dB, peak "
                         f"{frame['peak_db']:.1f} dBFS" + (f" | {bands} dB" if bands else ""))
+    if result.get("held_only"):
+        rows += ["", f"Playback started less than {hold:g} s after a stop: Live's meter may still "
+                     "show the peak held from before. Call again in a few seconds."]
     if not result.get("playing"):
-        rows += ["", "The transport was stopped: start playback and call again."]
+        rows += ["", "The transport was stopped: start playback and call again. For about "
+                     "3 s after a stop Live's meter still holds the last peak, so values "
+                     "here can be that peak, not current sound."]
     if not measured:
         rows += ["", "Spectrum per track: put the \"Y Meter\" Max for Live device on the "
                      "tracks you want to look at (see m4l/README.md)."]

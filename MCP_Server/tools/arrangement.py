@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 
 from ..coerce import BoolLike, FloatLike, IntLike, to_float, to_int, to_list
-from ..core import DESTRUCTIVE, READ, REVERSIBLE, live, tool
+from ..core import DESTRUCTIVE, READ, REVERSIBLE, _without_journal, live, tool
 
 WARP_MODE_NAMES = {0: "Beats", 1: "Tones", 2: "Texture", 3: "Re-Pitch", 4: "Complex",
                    5: "REX", 6: "Complex Pro"}
@@ -131,7 +131,7 @@ def set_warp_markers_batch(track_index: str, clip_index: IntLike, markers: str) 
     if keyword:
         result = live.call("set_warp_markers_batch", track_index=word,
                            clip_index=clip_index, markers=entries)
-        return json.dumps(result, ensure_ascii=False, default=str)
+        return json.dumps(_without_journal(result), ensure_ascii=False, default=str)
     result = live.call("set_warp_markers_batch", track_index=to_int(word, "track_index"),
                        clip_index=to_int(clip_index, "clip_index"), markers=entries)
     text = (f"Set {result['markers_set']} of {len(entries)} warp markers; "

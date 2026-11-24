@@ -1,9 +1,9 @@
-# AbletonMCP Extended — Beispiel-Prompts
+# Ableton Y Bridge — Beispiel-Prompts
 
 [English](PROMPTS.md) · **Deutsch**
 
-Das sind die Prompts aus dem Demo-Video. Kopiere sie in Claude (Cowork oder Claude Desktop),
-während AbletonMCP läuft.
+Zwei Beispiel-Prompts, die Schritt für Schritt ein kleines Projekt in Live aufbauen. Kopiere
+sie in Claude (Claude Desktop, Cowork oder Claude Code), während Ableton Y Bridge verbunden ist.
 
 ---
 
@@ -11,8 +11,6 @@ während AbletonMCP läuft.
 
 > Führe das zuerst aus, um das Grundprojekt „KI-Studio“ mit den Spuren Kick, Snare, HiHat,
 > Bass, Pad, Vox und einem Compressor auf der Bass-Spur anzulegen.
-
-*(Siehe Video: 0:00–0:39)*
 
 ---
 
@@ -75,7 +73,7 @@ Wichtige Hinweise für alle Aufgaben:
 
 ---
 
-## Wichtige eigene Tools im Video
+## Tools, auf die diese Prompts bauen
 
 | Tool | Was es tut |
 |------|-------------|
@@ -92,5 +90,6 @@ Wichtige Hinweise für alle Aufgaben:
 
 - **Claude Haiku** für Prompt 1 (schnell, einfaches Anlegen von Spuren)
 - **Claude Sonnet** für Prompt 2 (komplexes Routing, Iteration, Abwägen)
-- Ableton muss offen und das AbletonMCP Remote Script aktiv sein, bevor du startest
-- Der MCP-Server muss auf Port 9877 laufen
+- Live muss offen und **AbletonMCP** als Control Surface gewählt sein, bevor du startest
+- Lives Statuszeile zeigt dann „Ableton Y Bridge … on port 9877“; der MCP-Server verbindet
+  sich mit diesem Port

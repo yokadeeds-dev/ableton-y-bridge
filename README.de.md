@@ -118,6 +118,16 @@ nicht.
 - **Journal.** Jede Änderung über die Bridge bekommt eine Nummer, die in der Antwort des
   Tools steht (`Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB`). `list_ai_changes`
   zeigt die Liste.
+- **Antworten als JSON.** Jedes Tool, das etwas ändert, nimmt auch `as_json=true`. Es
+  antwortet dann mit `ok`, dem Ziel `ref` (`track:N`, `return:N`, `master` oder `null` bei
+  Änderungen am ganzen Song; `clip`, `device`, `scene`, wo angegeben), dem Stand danach in
+  `now`, dem Text in `message` und den `journal`-Nummern. Fehler und Verweigerungen lauten
+  `{"ok": false, "error": ..., "code": ...}`. Ohne den Schalter bleibt die Antwort Text.
+- **Unbenannte Sets.** Die erste Änderung in einem Set, das noch keine Datei hat, trägt
+  einen Hinweis (`Note: This Set has no file yet. ...`, in JSON das Feld `notice`): Die
+  Schritte lassen sich einzeln zurücknehmen, solange Live läuft, aber nicht nach einem
+  Absturz oder Neustart, und es gibt keinen gespeicherten Stand zum Zurückgehen. Der
+  Assistent wird gebeten, vorher das Speichern vorzuschlagen.
 - **Einzel-Undo.** `undo_ai_change(12)` nimmt genau Schritt 12 zurück und lässt alle
   anderen Schritte stehen. Hast du dasselbe inzwischen in Live geändert, bleibt deine
   Einstellung, und das Tool sagt es.
@@ -145,6 +155,13 @@ Einzelheiten, die Liste dessen, was sich zurücknehmen lässt, und die Grenzen v
   - Lives eigene Meter, für alle Spuren zugleich: `get_track_levels` tastet sie einige
     Sekunden lang ab und rechnet sie in dBFS um (nach dem Fader; die Umrechnung wurde in
     Live gemessen, siehe `AbletonMCP_Remote_Script/handlers/meters.py`).
+    Mit `as_json=true` antwortet es in JSON: `peak_dbfs` und `mean_dbfs` je `track:N`,
+    `return:N` und `master` (`null` bei Stille) und die Zahl der Lesungen.
+    Es zählen nur Lesungen bei laufendem Transport und mehr als 3,5 s nach dem letzten
+    Stopp: Nach einem Stopp hält Lives Meter die letzte Spitze noch etwa 3 s, auch wenn die
+    Wiedergabe neu startet. `readings_stopped` und `readings_held` sagen, wie viele Lesungen
+    bei gestopptem Transport oder binnen 3,5 s nach einem Stopp fielen; gibt es keine
+    anderen, werden diese genommen (`playing: false` bzw. `held_only: true`).
   - **Y Meter**, ein Max-for-Live-Gerät für beliebige Spuren: RMS, Spitzenpegel und ein
     Spektrum in fünf Bändern ([m4l/README.de.md](m4l/README.de.md)).
   - Der WASAPI-Analyzer für den ganzen Mix: Lautheit (ungefähre LUFS) und Spektrum dessen,

@@ -7,6 +7,8 @@ raise `CommandError` with a clear message instead of letting an IndexError
 or a Live RuntimeError reach the client.
 """
 
+import threading
+
 from . import journal, settings
 from .errors import (
     NOT_FOUND,
@@ -118,7 +120,13 @@ class LiveCtx(object):
         self.confirmed = bool((request or {}).get("confirm"))
         self._records = []
         self._quiet = False
-        journal.prepare(hub, self.song)
+        self._file_path = None
+        if request is not None:
+            # A command, run on Live's main thread (gate.py): settle the journal
+            # file and read what finish() needs later on the socket thread.
+            # Tickers build a context without a request and touch neither.
+            journal.prepare(hub, self.song)
+            self._file_path = str(peek(self.song, "file_path", "") or "")
 
     # -- safety and journal ------------------------------------------------
 
@@ -189,10 +197,39 @@ class LiveCtx(object):
             records = [("%s %s" % (spec.summary, journal.compact(arguments)), None, None, kind)]
         entries = [journal.add(self.hub, spec.name, arguments, text, undo, valid, kind)
                    for text, undo, valid, kind in records]
+        notice = self._untitled_notice()   # also clears the flag in a saved Set
         if isinstance(result, dict):
             result = dict(result)
             result["journal"] = entries
+            if notice:
+                result["notice"] = notice
         return result
+
+    UNTITLED_NOTICE = (
+        "This Set has no file yet. The changes can be taken back one by one with "
+        "undo_ai_change while Live runs, but not after a crash or restart of Live, and "
+        "there is no saved state to go back to. Suggest saving the Set before larger "
+        "changes.")
+
+    def _untitled_notice(self):
+        """The notice for the first change in an untitled Set, once (D18).
+
+        Runs on the socket thread: it uses only the path read on the main
+        thread in __init__, never the Live API. "Once" means once until a
+        change runs in a saved Set; two untitled Sets in a row share it.
+        """
+        if self._file_path is None:
+            return None
+        state = self.hub.state
+        lock = state.setdefault("untitled_notice_lock", threading.Lock())
+        with lock:
+            if self._file_path:
+                state.pop("untitled_notice_given", None)  # a later untitled Set gets it again
+                return None
+            if state.get("untitled_notice_given"):
+                return None
+            state["untitled_notice_given"] = True
+        return self.UNTITLED_NOTICE
 
     # -- general -----------------------------------------------------------
 
