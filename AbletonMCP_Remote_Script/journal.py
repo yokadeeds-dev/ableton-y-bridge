@@ -24,6 +24,7 @@ Live session; the text of the journal is also appended to a file per session.
 
 import json
 import os
+import re
 import threading
 import time
 
@@ -79,6 +80,57 @@ def prepare(hub, song):
     folder = os.path.join(root, _safe_name(set_name))
     stamp = time.strftime("%Y-%m-%d_%H%M%S", time.localtime(book["started"]))
     book["file"] = os.path.join(folder, stamp + ".jsonl")
+    try:
+        _prune(book, folder, book["file"], _keep())
+    except Exception as problem:  # cleaning up never breaks a command
+        book["prune_error"] = "%s: %s" % (type(problem).__name__, problem)
+
+
+def _keep():
+    """How many journal files per Set stay (D22)."""
+    rule = getattr(settings, "journal_keep", None)
+    if rule is not None:
+        return rule()
+    # settings is a core module: an older one (before a restart) lacks the rule
+    try:
+        return int(os.environ.get("ABLETON_MCP_JOURNAL_KEEP", 20))
+    except (TypeError, ValueError):
+        return 20
+
+
+# ASCII digits only, the whole name: nothing else in the folder matches
+_JOURNAL_FILE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}\.jsonl", re.ASCII)
+
+
+def _prune(book, folder, current, keep):
+    """Delete the oldest journal files of this Set so that at most ``keep``
+    remain, the running session's file included (D22).
+
+    Only files named like the journal writes them are touched; other files
+    and other Sets' folders stay. ``keep`` of 0 or less keeps everything.
+    """
+    if keep <= 0:
+        return
+    try:
+        names = os.listdir(folder)
+    except FileNotFoundError:
+        return  # no folder yet: the first session of this Set
+    except OSError as problem:
+        book["prune_error"] = "%s: %s" % (type(problem).__name__, problem)
+        return
+    mine = os.path.basename(current)
+    # the names sort by local start time (a clock set back can upset the order)
+    others = sorted(name for name in names if _JOURNAL_FILE.fullmatch(name) and name != mine)
+    for name in others[:max(0, len(others) - (keep - 1))]:  # oldest first
+        path = os.path.join(folder, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            os.remove(path)
+        except OSError as problem:
+            book["prune_error"] = "%s: %s" % (type(problem).__name__, problem)
+        else:
+            book["pruned"] = book.get("pruned", 0) + 1
 
 
 def _append_to_file(book, record):
@@ -191,7 +243,18 @@ def status(hub):
             "session_started": time.strftime("%Y-%m-%d %H:%M:%S",
                                              time.localtime(book["started"])),
             **_file_trouble(book),
+            **_prune_report(book),
         }
+
+
+def _prune_report(book):
+    """Old journal files deleted at the start of this session (D22), if any."""
+    report = {}
+    if book.get("pruned"):
+        report["old_journal_files_deleted"] = book["pruned"]
+    if book.get("prune_error"):
+        report["journal_cleanup_error"] = book["prune_error"]
+    return report
 
 
 def _after(outcome, then):

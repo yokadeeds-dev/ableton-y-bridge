@@ -109,9 +109,22 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   dieser Fall wurde nicht getestet.)
 - Der Text des Journals wird außerdem nach
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set-Name>\<Datum_Uhrzeit>.jsonl` geschrieben
-  (eine Zeile je Schritt, eine weitere, wenn ein Schritt zurückgenommen wird). Nichts wird
-  automatisch gelöscht. `ABLETON_MCP_JOURNAL_DIR` in Lives Umgebung verlegt den Ordner; der
-  Wert `off` schaltet die Datei ab.
+  (eine Zeile je Schritt, eine weitere, wenn ein Schritt zurückgenommen wird), eine Datei je
+  Live-Sitzung. Je Ordner bleiben die 20 neuesten Dateien, die der laufenden Sitzung
+  mitgezählt; beim ersten Befehl über die Bridge in einer Live-Sitzung werden ältere
+  Dateien in diesem Ordner endgültig gelöscht. Nur Dateien, die so heißen, wie das Journal
+  sie anlegt, sind betroffen. `ABLETON_MCP_JOURNAL_KEEP` in Lives Umgebung setzt die Zahl,
+  0 behält alle. `get_safety_status` meldet, wie viele Dateien gelöscht wurden
+  (`old_journal_files_deleted`), und ein Problem beim Aufräumen (`journal_cleanup_error`).
+  `ABLETON_MCP_JOURNAL_DIR` verlegt den Ordner; der Wert `off` schaltet Datei und
+  Aufräumen ab.
+  Grenzen: Der Ordner richtet sich nach dem Namen des Sets beim ersten Befehl der Sitzung.
+  Alle unbenannten Sets teilen sich `_untitled`, und Sets mit gleichem Namen (oder Namen,
+  die sich nur in Zeichen unterscheiden, die in Dateinamen nicht erlaubt sind) teilen sich
+  einen Ordner und dessen 20 Plätze. Ein Set, das während einer Sitzung unter neuem Namen
+  gespeichert wird, schreibt bis zum Ende der Sitzung in den alten Ordner. „Neueste“ richtet
+  sich nach der Startzeit im Dateinamen; eine zurückgestellte Uhr kann die Reihenfolge
+  stören.
 
 Wie sich ein Schritt zurücknehmen lässt, zeigt seine Undo-Art:
 

@@ -108,9 +108,21 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   that case was not tested.)
 - The text of the journal is also written to
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set name>\<date_time>.jsonl`
-  (one line per step, one more line when a step is taken back). Nothing is deleted
-  automatically. `ABLETON_MCP_JOURNAL_DIR` in Live's environment moves the folder;
-  the value `off` disables the file.
+  (one line per step, one more line when a step is taken back), one file per Live
+  session. The 20 newest files per folder are kept, the running session's included;
+  at the first command through the bridge in a Live session, older files in that
+  folder are deleted for good. Only files named like the journal writes them are
+  touched. `ABLETON_MCP_JOURNAL_KEEP` in Live's environment sets the number, 0 keeps
+  all. `get_safety_status` reports how many files were deleted
+  (`old_journal_files_deleted`) and a cleanup problem (`journal_cleanup_error`).
+  `ABLETON_MCP_JOURNAL_DIR` moves the folder; the value `off` disables the file and
+  the cleanup.
+  Limits: the folder goes by the Set's name when the session's first command runs.
+  All untitled Sets share `_untitled`, and Sets with the same name (or names that only
+  differ in characters not allowed in file names) share a folder and its 20 places.
+  A Set saved under a new name during a session keeps writing to the old folder until
+  the session ends. "Newest" goes by the start time in the file name; a clock set back
+  can upset the order.
 
 How a step can be taken back is shown as its undo kind:
 

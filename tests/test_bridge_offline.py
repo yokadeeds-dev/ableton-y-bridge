@@ -1333,6 +1333,162 @@ def _osc(address, *values):
     return pad(address.encode("utf-8")) + pad(tags.encode("ascii")) + body
 
 
+class JournalCleanupTests(unittest.TestCase):
+    """D22: per Set the newest journal files stay, the running session's included."""
+
+    class Hub(object):
+        def __init__(self):
+            self.state = {}
+
+    def setUp(self):
+        import importlib
+        self.journal = importlib.import_module(script.__name__ + ".journal")
+        self.root = tempfile.mkdtemp(prefix="journal_cleanup_")
+        kept = {name: os.environ.get(name) for name in
+                ("ABLETON_MCP_JOURNAL_DIR", "ABLETON_MCP_JOURNAL_KEEP")}
+
+        def restore():
+            for name, value in kept.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+        self.addCleanup(restore)
+        os.environ["ABLETON_MCP_JOURNAL_DIR"] = self.root
+        os.environ.pop("ABLETON_MCP_JOURNAL_KEEP", None)
+
+    def files(self, set_name, count, extra=()):
+        folder = os.path.join(self.root, set_name)
+        os.makedirs(folder, exist_ok=True)
+        names = ["2026-01-%02d_120000.jsonl" % (day + 1) for day in range(count)] + list(extra)
+        for name in names:
+            with open(os.path.join(folder, name), "w", encoding="utf-8") as handle:
+                handle.write("{}\n")
+        return folder
+
+    def start_session(self, set_name):
+        hub = self.Hub()
+        self.journal.prepare(hub, type("Song", (), {"name": set_name})())
+        return hub
+
+    def test_old_files_of_the_set_are_deleted(self):
+        folder = self.files("Song A", 25, extra=["notes.txt", "2026-01-30_120000.jsonl.bak"])
+        other = self.files("Song B", 3)
+        hub = self.start_session("Song A")
+        left = sorted(os.listdir(folder))
+        stamped = [name for name in left if name.endswith(".jsonl")]
+        self.assertEqual(stamped, ["2026-01-%02d_120000.jsonl" % day for day in range(7, 26)])
+        self.assertIn("notes.txt", left)                 # not named like a journal file
+        self.assertIn("2026-01-30_120000.jsonl.bak", left)
+        self.assertEqual(len(os.listdir(other)), 3)      # other Sets stay
+        self.assertEqual(self.journal.status(hub)["old_journal_files_deleted"], 6)
+        self.journal.add(hub, "set_tempo", {"tempo": 120}, "Tempo 120")
+        self.assertEqual(len([n for n in os.listdir(folder) if n.endswith(".jsonl")]), 20)
+
+    def test_first_session_of_a_set_and_few_files(self):
+        hub = self.start_session("New Song")             # no folder yet
+        self.assertNotIn("journal_cleanup_error", self.journal.status(hub))
+        folder = self.files("Small", 5)
+        hub = self.start_session("Small")
+        self.assertEqual(len(os.listdir(folder)), 5)
+        self.assertNotIn("old_journal_files_deleted", self.journal.status(hub))
+
+    def test_keep_zero_keeps_everything(self):
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "0"
+        folder = self.files("Song A", 25)
+        self.start_session("Song A")
+        self.assertEqual(len(os.listdir(folder)), 25)
+
+    def test_keep_from_the_environment(self):
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "3"
+        folder = self.files("Song A", 10)
+        self.start_session("Song A")
+        self.assertEqual(sorted(os.listdir(folder)),
+                         ["2026-01-09_120000.jsonl", "2026-01-10_120000.jsonl"])
+
+    def test_cleanup_trouble_never_breaks_a_command(self):
+        self.files("Song A", 25)
+        real_remove = self.journal.os.remove
+
+        def refuse(_path):
+            raise PermissionError("locked")
+        self.journal.os.remove = refuse
+        self.addCleanup(setattr, self.journal.os, "remove", real_remove)
+        hub = self.start_session("Song A")
+        self.journal.os.remove = real_remove
+        self.assertTrue(hub.state["journal"]["file"])
+        self.assertIn("PermissionError", self.journal.status(hub)["journal_cleanup_error"])
+        self.assertEqual(self.journal.add(hub, "set_tempo", {}, "Tempo")["n"], 1)
+
+    def stamped(self, folder):
+        return [name for name in os.listdir(folder) if name.endswith(".jsonl")]
+
+    def test_older_settings_module_still_reads_the_environment(self):
+        """Review MINOR 1: journal.py reloaded, settings.py (core) still the old one."""
+        import importlib
+        settings = importlib.import_module(script.__name__ + ".settings")
+        rule = settings.__dict__["journal_keep"]
+        del settings.journal_keep
+        self.addCleanup(setattr, settings, "journal_keep", rule)
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "0"
+        folder = self.files("Song A", 25)
+        self.start_session("Song A")
+        self.assertEqual(len(self.stamped(folder)), 25)
+        os.environ.pop("ABLETON_MCP_JOURNAL_KEEP")
+        self.start_session("Song A")
+        self.assertEqual(len(self.stamped(folder)), 19)
+
+    def test_invalid_and_negative_keep(self):
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "twenty"
+        folder = self.files("Song A", 25)
+        self.start_session("Song A")
+        self.assertEqual(len(self.stamped(folder)), 19)       # falls back to 20
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "-1"
+        self.files("Song A", 25)
+        self.start_session("Song A")
+        self.assertEqual(len(self.stamped(folder)), 25)       # keeps all
+
+    def test_journal_off_means_no_cleanup(self):
+        folder = self.files("Song A", 25)
+        os.environ["ABLETON_MCP_JOURNAL_DIR"] = "off"
+        hub = self.start_session("Song A")
+        self.assertEqual(len(self.stamped(folder)), 25)
+        self.assertNotIn("journal_cleanup_error", self.journal.status(hub))
+
+    def test_only_ascii_journal_names_are_touched(self):
+        """Review MINOR 2: other digits or a trailing newline make no journal file."""
+        strange = ["\u0662\u0660\u0662\u0666-\u0660\u0661-\u0660\u0661_"
+                   "\u0661\u0662\u0660\u0660\u0660\u0660.jsonl"]
+        os.environ["ABLETON_MCP_JOURNAL_KEEP"] = "1"      # every other journal file goes
+        folder = self.files("Song A", 3, extra=strange)
+        self.start_session("Song A")
+        self.assertEqual(os.listdir(folder), strange)
+        self.assertTrue(self.journal._JOURNAL_FILE.fullmatch("2026-01-01_120000.jsonl"))
+        self.assertFalse(self.journal._JOURNAL_FILE.fullmatch("2026-01-01_120000.jsonl\n"))
+
+    def test_unreadable_folder_is_reported(self):
+        """Review MINOR 3: only a missing folder is quiet."""
+        self.files("Song A", 3)
+        real_listdir = self.journal.os.listdir
+
+        def refuse(_path):
+            raise PermissionError("no access")
+        self.journal.os.listdir = refuse
+        self.addCleanup(setattr, self.journal.os, "listdir", real_listdir)
+        hub = self.start_session("Song A")
+        self.journal.os.listdir = real_listdir
+        self.assertIn("PermissionError", self.journal.status(hub)["journal_cleanup_error"])
+
+    def test_untitled_and_look_alike_sets_share_a_folder(self):
+        """Known limit (SAFETY): the folder goes by the Set name, untitled Sets share one."""
+        folder = self.files("_untitled", 25)
+        self.start_session("")
+        self.assertEqual(len(self.stamped(folder)), 19)
+        folder = self.files("Mix_", 25)
+        self.start_session("Mix?")                       # becomes Mix_ as a folder name
+        self.assertEqual(len(self.stamped(folder)), 19)
+
+
 class AnalyzerFeedTests(unittest.TestCase):
     def test_json_master_frame(self):
         from MCP_Server.analyzer_feed import AnalyzerFeed

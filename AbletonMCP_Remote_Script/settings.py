@@ -39,6 +39,16 @@ CONFIRM_ENV_SWITCH = "ABLETON_MCP_CONFIRM"
 # Where the change journal is written; "off" disables the file.
 JOURNAL_ENV = "ABLETON_MCP_JOURNAL_DIR"
 
+# How many journal files are kept per Set: the newest ones, the file of the
+# running session included; older ones are deleted at the first command
+# through the bridge in a Live session (D22). 0 or less keeps all.
+JOURNAL_KEEP_ENV = "ABLETON_MCP_JOURNAL_KEEP"
+JOURNAL_KEEP_DEFAULT = 20
+
+
+def journal_keep():
+    return _env_int(JOURNAL_KEEP_ENV, JOURNAL_KEEP_DEFAULT)
+
 
 def confirm_required():
     return os.environ.get(CONFIRM_ENV_SWITCH, "1").strip() != "0"
