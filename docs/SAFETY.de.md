@@ -105,8 +105,9 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   vollständig, und `list_ai_changes` warnt, wie viele Zeilen in der Datei fehlen.
 - Das Journal gehört zu einem Lauf des Remote Scripts in Live. Die Nummern beginnen bei 1,
   wenn Live das Script startet, und laufen über Hot Reloads und Neustarts des MCP-Servers
-  weiter. (Live startet das Script normalerweise neu, wenn ein anderes Set geladen wird;
-  dieser Fall wurde nicht getestet.)
+  weiter. Lädt man ein anderes Set (auch Datei > Neues Live Set), startet Live das
+  Script neu: Das Journal beginnt wieder bei 1 mit einer neuen Datei, und die Schritte
+  des vorigen Sets lassen sich nicht mehr mit `undo_ai_change` zurücknehmen.
 - Der Text des Journals wird außerdem nach
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set-Name>\<Datum_Uhrzeit>.jsonl` geschrieben
   (eine Zeile je Schritt, eine weitere, wenn ein Schritt zurückgenommen wird), eine Datei je
@@ -122,7 +123,8 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   Alle unbenannten Sets teilen sich `_untitled`, und Sets mit gleichem Namen (oder Namen,
   die sich nur in Zeichen unterscheiden, die in Dateinamen nicht erlaubt sind) teilen sich
   einen Ordner und dessen 20 Plätze. Ein Set, das während einer Sitzung unter neuem Namen
-  gespeichert wird, schreibt bis zum Ende der Sitzung in den alten Ordner. „Neueste“ richtet
+  gespeichert wird, schreibt bis zum Ende der Sitzung in den alten Ordner, ebenso ein
+  unbenanntes Set, das zum ersten Mal gespeichert wird (`_untitled`). „Neueste“ richtet
   sich nach der Startzeit im Dateinamen; eine zurückgestellte Uhr kann die Reihenfolge
   stören.
 
@@ -159,3 +161,8 @@ lassen sich zurücknehmen; ältere behalten ihren Text.
   `ABLETON_MCP_ALLOW_EVAL=1` läuft, und ist obendrein destruktiv.
 - Es ist kein manipulationssicheres Prüfprotokoll: Die Journal-Datei ist eine einfache
   Textdatei.
+- **Unbenannte Sets.** Änderungen sind in einem Set ohne Datei erlaubt, aber das
+  Einzel-Undo des Journals liegt nur im Speicher, und es gibt keinen gespeicherten Stand
+  zum Zurückgehen. Die erste Änderung dort trägt einen Hinweis (`Note: ...` als Text,
+  `notice` in JSON), der das sagt; er kommt wieder nach einer Änderung in einem
+  gespeicherten Set und nach dem Laden eines anderen Sets.

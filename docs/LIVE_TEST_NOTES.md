@@ -214,6 +214,20 @@ No dialog that stops the Remote Script was found, and `eval_code` is off, so
 neither timeout path (step not started, step still running) could be provoked
 in Live. Both rest on the offline tests (`TimeoutAndJournalTests`).
 
+## Loading another Set in Live (PTc SYNC 5), 2026-11-24 18:22
+
+Live 12.3.6, Remote Script from `97ede0b`. Read from Live's `Log.txt` and the
+bridge's status, no command that changes the Set.
+
+| Check | Verdict | Seen |
+|---|---|---|
+| Live starts the script anew when a Set is loaded | pass | `bridge going down`, then `bridge 2.2.0 up` right after each `Loading document` at 18:00:53 (new Set from the template), 18:01:00 and 18:05:50 |
+| journal session ends with the Set | pass | `get_safety_status`: `session_started` 18:06:25 and a file in the folder of the Set loaded at 18:05:50, 0 entries |
+
+The journal, single-step undo and the untitled notice live in the hub's state,
+and each start of the script makes a new hub. So all three begin anew with
+every loaded Set, an untitled one included (D23).
+
 ## Not tested
 
 - **macOS**, and any Live version other than 12.3.6.
@@ -241,8 +255,7 @@ in Live. Both rest on the offline tests (`TimeoutAndJournalTests`).
   sidechain routing, warp mode, new clip, new arrangement audio clip, deleted or
   cleared locators. They use the same mechanism and run in the offline tests in
   part, but were not taken back in Live.
-- **Journal across loading another Set** in the same Live session, and the limit
-  `ABLETON_MCP_MAX_ZONE` in Live (offline test only).
+- **The limit `ABLETON_MCP_MAX_ZONE`** in Live (offline test only).
 - **Freezing**: Live's API has no call for it; `freeze_track` only reports.
 - **`tools/melody_check/`**: adapted to the new note format, not run.
 - **Long sessions and load**: no test over hours, no large Sets, no second

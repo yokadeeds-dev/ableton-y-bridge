@@ -104,8 +104,9 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   `list_ai_changes` warns how many lines are missing from the file.
 - The journal belongs to one run of the Remote Script inside Live. Numbers start at 1
   when Live starts the script and continue across hot reloads and across restarts of
-  the MCP server. (Live normally starts the script anew when another Set is loaded;
-  that case was not tested.)
+  the MCP server. Loading another Set (also File > New Live Set) makes Live start the
+  script anew: the journal starts again at 1 with a new file, and the steps of the
+  Set before can no longer be taken back with `undo_ai_change`.
 - The text of the journal is also written to
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set name>\<date_time>.jsonl`
   (one line per step, one more line when a step is taken back), one file per Live
@@ -121,7 +122,7 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   All untitled Sets share `_untitled`, and Sets with the same name (or names that only
   differ in characters not allowed in file names) share a folder and its 20 places.
   A Set saved under a new name during a session keeps writing to the old folder until
-  the session ends. "Newest" goes by the start time in the file name; a clock set back
+  the session ends; so does an untitled Set saved for the first time (`_untitled`). "Newest" goes by the start time in the file name; a clock set back
   can upset the order.
 
 How a step can be taken back is shown as its undo kind:
@@ -159,4 +160,5 @@ back; older ones keep their text.
 - **Untitled Sets.** Changes are allowed in a Set that has no file yet, but the
   journal's undo lives only in memory and there is no saved state to fall back on.
   The first change there carries a notice (`Note: ...` in text, `notice` in JSON)
-  that says so; it comes again after a change in a saved Set.
+  that says so; it comes again after a change in a saved Set and after loading
+  another Set.

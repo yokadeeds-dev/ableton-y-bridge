@@ -232,7 +232,8 @@ class LiveCtx(object):
 
         Runs on the socket thread: it uses only the path read on the main
         thread in __init__, never the Live API. "Once" means once until a
-        change runs in a saved Set; two untitled Sets in a row share it.
+        change runs in a saved Set. Loading another Set makes Live start the
+        script anew with a new hub, so the notice comes again then (D23).
         With ``use`` False the notice is neither given nor marked as given.
         """
         if self._file_path is None:
