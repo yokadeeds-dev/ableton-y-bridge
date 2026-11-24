@@ -94,10 +94,12 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   behind.
 - A step can be taken back once.
 - **Late answers.** If Live does not answer in time (a dialog is open, Live is busy)
-  but had already started a step, that step still runs to its end and the change still
-  gets its entry; the timeout error says so, and `list_ai_changes` shows the number.
-  Further steps of the same command are dropped. A step Live had not started yet is
-  dropped and changes nothing.
+  but had already started a step, that step still runs to its end. If it succeeds and
+  changes the Set, the change still gets its entry; the timeout error says so, and
+  `list_ai_changes` shows the number. Further steps of the same command are dropped.
+  A step Live had not started yet is dropped and changes nothing. If a step that ends
+  after the timeout cannot be journaled, `bridge_status` counts it as `late_failures`;
+  if the entry for earlier steps fails, the timeout error says so.
 - If the journal file cannot be written, the journal in memory stays complete and
   `list_ai_changes` warns how many lines are missing from the file.
 - The journal belongs to one run of the Remote Script inside Live. Numbers start at 1

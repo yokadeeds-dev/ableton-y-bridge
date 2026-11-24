@@ -107,6 +107,14 @@ class LiveLink:
                 self._open()
                 reply = self._exchange(command, params, timeout)
         if reply.get("status") == "error":
+            # a timeout after earlier steps ran still names their journal
+            # entries and the untitled-Set notice: the tool answer carries them
+            details = reply.get("details")
+            if isinstance(details, dict):
+                if self.journal is not None and isinstance(details.get("journal"), list):
+                    self.journal.extend(details["journal"])
+                if self.notices is not None and details.get("notice"):
+                    self.notices.append(str(details["notice"]))
             raise LiveError(
                 str(reply.get("message", "unknown error")),
                 str(reply.get("code", "error")),

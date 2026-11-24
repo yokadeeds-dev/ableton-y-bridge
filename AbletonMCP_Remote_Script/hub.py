@@ -90,14 +90,18 @@ class Hub(object):
                 # The client got a timeout, but Live ran the step to its end:
                 # journal what it did (main thread, after the step). A step that
                 # failed is not journaled, as on the path without a timeout.
+                # Nobody waits for a reply any more: the untitled-Set notice is
+                # kept for the next change, and trouble goes to the gate, which
+                # counts it (bridge_status: late_failures).
                 try:
                     if isinstance(job.value, Later):
                         self._log("%s timed out; its later steps are dropped" % spec.name)
                     if job.failure is None:
-                        self._journal_anyway(used, spec, arguments)
+                        self._journal_anyway(used, spec, arguments, notify=False, strict=True)
                 except Exception:
                     self._log("late journal for %s failed:\n%s"
                               % (spec.name, traceback.format_exc()))
+                    raise
 
             try:
                 result = self.gate.call(work, spec.timeout, late=late)
@@ -110,7 +114,7 @@ class Hub(object):
                                             wait_ticks=result.ticks, late=late)
             except CommandError as problem:
                 if problem.code == TIMEOUT:
-                    self._after_timeout(problem, used, spec, arguments)
+                    self._after_timeout(problem, used, spec, arguments, loaded.context_class)
                 raise
             if used and hasattr(used[0], "finish"):
                 result = used[0].finish(spec, arguments, result)
@@ -129,36 +133,68 @@ class Hub(object):
                 "message": "%s: %s" % (type(problem).__name__, problem),
             }
 
-    def _journal_anyway(self, used, spec, arguments):
-        """Journal the steps a command made although its reply was a timeout."""
+    def _journal_anyway(self, used, spec, arguments, notify=True, strict=False):
+        """Journal the steps a command made although its reply was a timeout.
+
+        Returns the entries and the untitled-Set notice (or None). With
+        ``notify`` False the notice is not used up; with ``strict`` a failure
+        is raised instead of logged.
+        """
         if not used or not hasattr(used[0], "finish"):
-            return []
+            return [], None
+        context = used[0]
         try:
-            done = used[0].finish(spec, arguments, {})
+            finish_late = getattr(context, "finish_late", None)  # an older context has none
+            if finish_late is not None:
+                done = finish_late(spec, arguments, notify)
+            else:
+                done = context.finish(spec, arguments, {})
         except Exception:
+            if strict:
+                raise
             self._log("journal after timeout failed:\n%s" % traceback.format_exc())
-            return []
-        entries = done.get("journal") if isinstance(done, dict) else None
+            return [], None
+        done = done if isinstance(done, dict) else {}
+        entries = done.get("journal") or []
         if entries:
             self._log("%s timed out after it changed the Set; journaled as %s"
                       % (spec.name, ", ".join("#%d" % e["n"] for e in entries)))
-        return entries or []
+        return entries, done.get("notice")
 
-    def _after_timeout(self, problem, used, spec, arguments):
+    @staticmethod
+    def _journals(context_class, spec):
+        """Whether a command of this kind gets a journal entry (the context
+        class owns the rule; the fallback is the rule of older contexts)."""
+        rule = getattr(context_class, "journals", None)
+        if rule is not None:
+            return rule(spec)
+        return spec.zone != READ and getattr(spec, "journal", True)
+
+    def _after_timeout(self, problem, used, spec, arguments, context_class=None):
         """A timeout after the command already changed something must not lose
         the journal entry (single-step undo depends on it)."""
         if problem.details.get("still_running"):
             # the gate calls late() once the step is over; it journals then
             problem.message += ". Later steps of the command, if any, are dropped."
-            if spec.zone != READ and getattr(spec, "journal", True):
-                problem.message += " The change is journaled then: list_ai_changes shows it."
+            if self._journals(context_class, spec):
+                problem.message += (" If the step succeeds and changes the Set, it is "
+                                     "journaled then: list_ai_changes shows it.")
         elif used:
             # an earlier step of the command ran, a later one was dropped
-            entries = self._journal_anyway(used, spec, arguments)
+            try:
+                entries, notice = self._journal_anyway(used, spec, arguments, strict=True)
+            except Exception:
+                self._log("journal after timeout failed:\n%s" % traceback.format_exc())
+                entries, notice = [], None
+                problem.details["journal_failed"] = True
+                problem.message += (". Earlier steps of it did run, but their journal entry "
+                                    "failed (see Live's log)")
             if entries:
                 problem.details["journal"] = entries
                 problem.message += (". Earlier steps of it did run and are journaled: %s"
                                     % ", ".join("#%d" % e["n"] for e in entries))
+            if notice:
+                problem.details["notice"] = notice
         problem.args = (problem.message,)
 
     # -- periodic work (main thread) ---------------------------------------

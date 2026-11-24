@@ -442,6 +442,8 @@ class TimeoutAndJournalTests(BridgeCase):
         self.assertEqual(SONG.tracks[2].name, "Late name")
         self.assertEqual(sum("Late name" in t for t in self.texts()), 1, self.texts()[-3:])
         self.assertIn("still working on the current step", str(caught.exception))
+        self.assertIn("If the step succeeds and changes the Set, it is journaled then",
+                      str(caught.exception))
         self.assertTrue(caught.exception.details.get("still_running"))
         self.undo_last(1)
         self.assertNotEqual(SONG.tracks[2].name, "Late name")
@@ -487,10 +489,12 @@ class TimeoutAndJournalTests(BridgeCase):
         self.undo_last(1)
         self.assertIn("Later steps of the command, if any, are dropped", str(caught.exception))
 
-    def test_trouble_in_late_is_logged_and_live_goes_on(self):
-        """Delta review MINOR 3: late() logs its own failure; the gate keeps working."""
+    def test_trouble_in_late_is_logged_counted_and_live_goes_on(self):
+        """PTc:VERIFY LECK A: a step that ends after a timeout but cannot be
+        journaled is logged and counted in late_failures; the gate keeps working."""
         hub = self.surface._hub
         hub_module = sys.modules[type(hub).__module__]
+        context_class = hub.loaded.context_class
 
         def slow_then_more(original):
             def handler(live, **arguments):
@@ -499,10 +503,14 @@ class TimeoutAndJournalTests(BridgeCase):
                 return hub_module.Later(lambda: {}, 0)
             return handler
 
-        def failing(*_args):
-            raise RuntimeError("journal gone")
-        hub._journal_anyway = failing
-        self.addCleanup(delattr, hub, "_journal_anyway")
+        kept = context_class.__dict__["finish"]
+
+        def failing(context, spec, *args, **kwargs):  # only this command's journal breaks
+            if spec.name == "set_track_name":
+                raise RuntimeError("journal gone")
+            return kept(context, spec, *args, **kwargs)
+        context_class.finish = failing
+        self.addCleanup(setattr, context_class, "finish", kept)
         self.patched("set_track_name", 0.25, slow_then_more)
         log = self.surface.log
         start = len(log)
@@ -513,9 +521,157 @@ class TimeoutAndJournalTests(BridgeCase):
             lambda: any("late journal for set_track_name failed" in l for l in log[start:])),
             log[start:])
         self.assertTrue(any("timed out; its later steps are dropped" in l for l in log[start:]))
-        self.assertEqual(self.call("get_version")["late_failures"], failures)  # late() caught it
+        self.assertTrue(self.wait_for(
+            lambda: self.call("get_version")["late_failures"] == failures + 1),
+            "a journal lost after a timeout must show in bridge_status")
         self.assertEqual(self.call("get_session_info")["tempo"] > 0, True)  # drain goes on
         SONG.tracks[2].name = "Keys"
+
+    def test_running_step_that_fails_after_the_timeout_is_not_journaled(self):
+        """PTc:VERIFY: a step that fails after the timeout changes no journal and counts nothing."""
+        ended = threading.Event()
+
+        def slow_fail(original):
+            def handler(live, **arguments):
+                try:
+                    time.sleep(0.6)              # longer than the timeout below
+                    original(live, **arguments)  # it did change the Set ...
+                    raise RuntimeError("step broke")  # ... and then failed
+                finally:
+                    ended.set()
+            return handler
+        self.patched("set_track_name", 0.25, slow_fail)
+        count = len(self.texts())
+        failures = self.call("get_version")["late_failures"]
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="Broken late")
+        self.assertTrue(caught.exception.details.get("still_running"))
+        self.assertTrue(ended.wait(5))
+        # the gate runs jobs in order: once this call is answered, late() is over
+        self.assertEqual(self.call("get_version")["late_failures"], failures)
+        self.assertEqual(len(self.texts()), count, self.texts()[-2:])
+        SONG.tracks[2].name = "Keys"
+
+    def test_timeout_between_steps_reports_a_failed_journal(self):
+        """Review MINOR 1: if the entry for the earlier steps fails, the timeout says so."""
+        hub = self.surface._hub
+        hub_module = sys.modules[type(hub).__module__]
+        context_class = hub.loaded.context_class
+        kept = context_class.__dict__["finish"]
+
+        def failing(context, spec, *args, **kwargs):
+            if spec.name == "set_track_name":
+                raise RuntimeError("journal gone")
+            return kept(context, spec, *args, **kwargs)
+        context_class.finish = failing
+        self.addCleanup(setattr, context_class, "finish", kept)
+
+        def chained(original):
+            def handler(live, **arguments):
+                original(live, **arguments)
+                return hub_module.Later(lambda: {"never": True}, 2000)
+            return handler
+        self.patched("set_track_name", 0.3, chained)
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="Unjournaled step")
+        self.assertIn("their journal entry failed", str(caught.exception))
+        self.assertTrue(caught.exception.details.get("journal_failed"))
+        SONG.tracks[2].name = "Keys"
+
+    def test_older_context_without_the_new_methods(self):
+        """Review MINOR 4: a new hub with an older context (hot reload) falls back to
+        finish() and to its own journal rule, and still counts a lost late journal."""
+        hub = self.surface._hub
+        context_class = hub.loaded.context_class
+        for name in ("finish_late", "journals"):
+            kept = context_class.__dict__[name]
+            delattr(context_class, name)
+            self.addCleanup(setattr, context_class, name, kept)
+
+        def slow(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                return original(live, **arguments)
+            return handler
+        self.patched("set_track_name", 0.25, slow)
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="Old context")
+        self.assertIn("If the step succeeds and changes the Set, it is journaled then",
+                      str(caught.exception))
+        self.assertTrue(self.wait_for(lambda: any("Old context" in t for t in self.texts())))
+        failures = self.call("get_version")["late_failures"]  # through the gate: late() is over
+        self.assertEqual(sum("Old context" in t for t in self.texts()), 1)
+        self.undo_last(1)
+
+        kept_finish = context_class.__dict__["finish"]       # now the old finish() breaks
+
+        def failing(context, spec, *args, **kwargs):
+            if spec.name == "set_track_name":
+                raise RuntimeError("journal gone")
+            return kept_finish(context, spec, *args, **kwargs)
+        context_class.finish = failing
+        self.addCleanup(setattr, context_class, "finish", kept_finish)
+        with self.assertRaises(LiveError):
+            self.call("set_track_name", track_index=2, name="Old context lost")
+        self.assertTrue(self.wait_for(
+            lambda: self.call("get_version")["late_failures"] == failures + 1))
+        SONG.tracks[2].name = "Keys"
+
+    def untitled(self):
+        """An untitled Set for one test; the notice flag is restored afterwards."""
+        state = self.surface._hub.state
+        before = (SONG.file_path, state.get("untitled_notice_given"))
+
+        def restore():
+            SONG.file_path = before[0]
+            state.pop("untitled_notice_given", None)
+            if before[1]:
+                state["untitled_notice_given"] = before[1]
+        self.addCleanup(restore)
+        SONG.file_path = ""
+        state.pop("untitled_notice_given", None)
+        return state
+
+    def test_late_journal_keeps_the_untitled_notice(self):
+        """PTc:VERIFY LECK B (D18): nobody reads a late reply, so the notice stays for the next change."""
+        def slow(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                return original(live, **arguments)
+            return handler
+        self.patched("set_track_name", 0.25, slow)
+        state = self.untitled()
+        with self.assertRaises(LiveError):
+            self.call("set_track_name", track_index=2, name="Late untitled")
+        self.assertTrue(self.wait_for(lambda: any("Late untitled" in t for t in self.texts())))
+        self.assertFalse(state.get("untitled_notice_given"))
+        self.assertIn("\nNote: This Set has no file yet.", tracks.set_track_volume(1, -3))
+        self.undo_last(2)
+
+    def test_timeout_between_steps_as_json_names_journal_and_notice(self):
+        """PTc:VERIFY LECK B/C (D15, D18): the JSON answer of such a timeout carries the
+        journal entries of the steps that ran under `journal`, and the notice."""
+        hub_module = sys.modules[type(self.surface._hub).__module__]
+
+        def chained(original):
+            def handler(live, **arguments):
+                original(live, **arguments)      # step 1 changes the name at once
+                return hub_module.Later(lambda: {"never": True}, 2000)  # step 2 waits too long
+            return handler
+        self.patched("set_track_name", 0.3, chained)
+        self.untitled()
+        data = json.loads(tracks.set_track_name(2, "Json step", as_json=True))
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["code"], "timeout")
+        self.assertTrue(data.get("journal"), data)
+        self.assertTrue(all(set(step) == {"n", "text"} for step in data["journal"]), data)
+        self.assertTrue(any("Json step" in step["text"] for step in data["journal"]), data)
+        self.assertTrue(data.get("notice", "").startswith("This Set has no file yet."), data)
+        self.assertNotIn("notice", data.get("details", {}))   # once, in its own field
+        self.assertNotIn("journal", data.get("details", {}))
+        text = tracks.set_track_volume(1, -3)    # the notice was given: not again
+        self.assertNotIn("Note:", text)
+        self.undo_last(2)
 
     def test_read_command_timeout_promises_no_journal(self):
         """Delta review MINOR 1: a read that times out makes no journal promise."""

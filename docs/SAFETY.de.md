@@ -93,10 +93,14 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   der Schritt hinterlassen hat.
 - Ein Schritt lässt sich einmal zurücknehmen.
 - **Späte Antworten.** Antwortet Live nicht rechtzeitig (ein Dialog ist offen, Live ist
-  beschäftigt), hatte einen Schritt aber schon begonnen, läuft dieser Schritt zu Ende,
-  und die Änderung bekommt trotzdem ihren Eintrag; die Zeitüberschreitung sagt das, und
-  `list_ai_changes` zeigt die Nummer. Weitere Schritte desselben Befehls entfallen.
-  Einen Schritt, den Live noch nicht begonnen hatte, verwirft die Bridge; er ändert nichts.
+  beschäftigt), hatte einen Schritt aber schon begonnen, läuft dieser Schritt zu Ende.
+  Gelingt er und ändert das Set, bekommt die Änderung trotzdem ihren Eintrag; die
+  Zeitüberschreitung sagt das, und `list_ai_changes` zeigt die Nummer. Weitere Schritte
+  desselben Befehls entfallen. Einen Schritt, den Live noch nicht begonnen hatte, verwirft
+  die Bridge; er ändert nichts. Lässt sich ein Schritt, der erst nach der
+  Zeitüberschreitung endet, nicht journalisieren, zählt `bridge_status` das als
+  `late_failures`; scheitert der Eintrag für frühere Schritte, sagt es die
+  Zeitüberschreitung.
 - Lässt sich die Journal-Datei nicht schreiben, bleibt das Journal im Speicher
   vollständig, und `list_ai_changes` warnt, wie viele Zeilen in der Datei fehlen.
 - Das Journal gehört zu einem Lauf des Remote Scripts in Live. Die Nummern beginnen bei 1,

@@ -318,8 +318,11 @@ def tool(zone: str = READ, unless: Callable = None) -> Callable:
             if isinstance(answer, _Failure):
                 body = {"ok": False, "error": answer.message, "code": answer.code}
                 body.update(write_target(name, given, results))
-                if answer.details:
-                    body["details"] = answer.details
+                # journal and notice have fields of their own (link.py lifts them out)
+                details = {key: value for key, value in (answer.details or {}).items()
+                           if key not in ("journal", "notice")}
+                if details:
+                    body["details"] = details
                 if journal:  # steps made before the failure, for undo_ai_change
                     body["journal"] = journal
                 return body
@@ -349,8 +352,10 @@ def tool(zone: str = READ, unless: Callable = None) -> Callable:
                 return function(*args, **kwargs)
             except LiveError as problem:
                 extra = ""
-                if problem.details:
-                    extra = " | " + json.dumps(problem.details, ensure_ascii=False, default=str)
+                shown = {key: value for key, value in (problem.details or {}).items()
+                         if key != "notice"}          # the notice comes as "Note:" below
+                if shown:
+                    extra = " | " + json.dumps(shown, ensure_ascii=False, default=str)
                 return _Failure(problem.code, f"Error in {name} [{problem.code}]: {problem}{extra}",
                                 str(problem), problem.details)
             except (ValueError, TypeError, KeyError) as problem:

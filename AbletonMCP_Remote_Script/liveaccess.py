@@ -111,6 +111,12 @@ def still_there(obj, collection):
     return -1
 
 
+def _journals(spec):
+    """Whether a command gets an automatic journal entry when it noted
+    nothing itself."""
+    return bool(getattr(spec, "journal", True)) and spec.zone != READ
+
+
 class LiveCtx(object):
     def __init__(self, surface, hub, request=None):
         self.surface = surface
@@ -185,19 +191,29 @@ class LiveCtx(object):
 
         self.record(text, undo, valid)
 
-    def finish(self, spec, arguments, result):
+    journals = staticmethod(_journals)  # the hub asks this too (timeout message): one rule
+
+    def finish_late(self, spec, arguments, notify):
+        """finish() for steps that ended after the client got a timeout.
+
+        With ``notify`` False nobody reads the reply, so the untitled-Set
+        notice stays for the next change.
+        """
+        return self.finish(spec, arguments, {}, notify=notify)
+
+    def finish(self, spec, arguments, result, notify=True):
         """Called by the hub after success: turn the notes into journal entries."""
         if not getattr(spec, "journal", True):
             return result
         records = self._records
         if not records:
-            if spec.zone == READ or self._quiet:
+            if not _journals(spec) or self._quiet:
                 return result
             kind = journal.LIVE_UNDO if spec.undo == "live" else journal.NONE
             records = [("%s %s" % (spec.summary, journal.compact(arguments)), None, None, kind)]
         entries = [journal.add(self.hub, spec.name, arguments, text, undo, valid, kind)
                    for text, undo, valid, kind in records]
-        notice = self._untitled_notice()   # also clears the flag in a saved Set
+        notice = self._untitled_notice(use=notify)   # also clears the flag in a saved Set
         if isinstance(result, dict):
             result = dict(result)
             result["journal"] = entries
@@ -211,12 +227,13 @@ class LiveCtx(object):
         "there is no saved state to go back to. Suggest saving the Set before larger "
         "changes.")
 
-    def _untitled_notice(self):
+    def _untitled_notice(self, use=True):
         """The notice for the first change in an untitled Set, once (D18).
 
         Runs on the socket thread: it uses only the path read on the main
         thread in __init__, never the Live API. "Once" means once until a
         change runs in a saved Set; two untitled Sets in a row share it.
+        With ``use`` False the notice is neither given nor marked as given.
         """
         if self._file_path is None:
             return None
@@ -226,7 +243,7 @@ class LiveCtx(object):
             if self._file_path:
                 state.pop("untitled_notice_given", None)  # a later untitled Set gets it again
                 return None
-            if state.get("untitled_notice_given"):
+            if not use or state.get("untitled_notice_given"):
                 return None
             state["untitled_notice_given"] = True
         return self.UNTITLED_NOTICE
