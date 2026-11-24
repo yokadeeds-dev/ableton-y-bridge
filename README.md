@@ -1,5 +1,7 @@
 # Ableton Y Bridge
 
+**English** · [Deutsch](README.de.md)
+
 An MCP server and a Remote Script that let an AI assistant (Claude or any other MCP
 client) work inside **Ableton Live 12**: read the Set, build tracks and clips, write
 MIDI, load and adjust devices, handle warp markers and locators, and edit `.als` project
@@ -11,7 +13,7 @@ files where Live's own API ends.
 > **Windows first.** Written and tested on Windows 11 with Live 12.3.6. macOS is untested.
 >
 > **It changes your open Live Set directly.** Destructive steps need a confirmation and
-> every change is journalled, but ordinary edits happen at once. Work on a copy of
+> every change is journaled, but ordinary edits happen at once. Work on a copy of
 > Sets you care about.
 
 ## What it can do
@@ -44,7 +46,7 @@ MCP client  --stdio-->  MCP_Server (Python)  --TCP 127.0.0.1:9877-->  Remote Scr
 
 - **Remote Script** (`AbletonMCP_Remote_Script/`): runs inside Live. A small TCP server
   accepts `{"type": ..., "params": {...}}` messages. Each command is looked up in a
-  **command register** (handler plus metadata: zone, undo behaviour, parameters, timeout)
+  **command register** (handler plus metadata: zone, undo behavior, parameters, timeout)
   and executed on Live's main thread; the reply is `{"status": "success", "result": ...}`
   or `{"status": "error", "message": ..., "code": ...}`.
 - **MCP server** (`MCP_Server/`): turns the tools above into bridge commands and does
@@ -214,23 +216,23 @@ like seeing progress held back because someone sits on it for financial reasons.
 we can shape things much better than each on our own.
 
 That is why Ableton Y Bridge is licensed under the AGPL: anyone may use, study and improve
-it, and improvements stay open for everyone. The commercial licence exists only for those
+it, and improvements stay open for everyone. The commercial license exists only for those
 who want to build it into a closed product.
 
 I also have a bit of a gamer's mindset: I like seeing my name in the high-score table. So if
 the bridge helps you, a mention of "Yoka" in your credits makes my day.
 
-## Licence
+## License
 
 Copyright (C) 2026 Yoka
 
 Ableton Y Bridge is dual-licensed:
 
 - **Open source:** [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only).
-- **Commercial licence:** for embedding it in a closed or commercial product without the
+- **Commercial license:** for embedding it in a closed or commercial product without the
   AGPL obligations. See [LICENSING.md](LICENSING.md).
 
 Contributions need the contributor agreement in [CONTRIBUTING.md](CONTRIBUTING.md).
 Specifications and conformance tests developed together with other projects are kept in
-separate repositories under the MIT licence, so that projects under other licences can
+separate repositories under the MIT license, so that projects under other licenses can
 use them too.

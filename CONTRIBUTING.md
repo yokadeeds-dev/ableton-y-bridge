@@ -1,16 +1,18 @@
 # Contributing
 
+**English** · [Deutsch](CONTRIBUTING.de.md)
+
 Contributions are welcome. A few things first.
 
-## Licence of your contribution
+## License of your contribution
 
-Ableton Y Bridge is **dual-licensed** (AGPL-3.0 and a commercial licence, see
+Ableton Y Bridge is **dual-licensed** (AGPL-3.0 and a commercial license, see
 [`LICENSING.md`](LICENSING.md)). So that the project owner can include contributions in
 **both**, every contribution comes with this agreement:
 
 > By submitting a pull request you agree that your contribution is published under
 > **AGPL-3.0**, **and** you grant the project owner (Yoka) an irrevocable, worldwide,
-> royalty-free right to also license your contribution under a **commercial licence**.
+> royalty-free right to also license your contribution under a **commercial license**.
 
 A contribution cannot be merged without this agreement. For larger contributions a
 separately signed agreement may be needed.

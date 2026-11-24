@@ -1,5 +1,7 @@
 # AbletonMCP Extended — Example Prompts
 
+**English** · [Deutsch](PROMPTS.de.md)
+
 These are the prompts used in the demo video. Copy and paste them into Claude (Cowork or Claude Desktop) with AbletonMCP running.
 
 ---
@@ -22,7 +24,7 @@ Prerequisite: Prompt 1 (Haiku) has already been executed.
 The project "KI-Studio" exists with Kick, Snare, HiHat, Bass, Pad, Vox, Compressor on Bass.
 
 === TASK A — Sidechain Routing (Kick → Bass Compressor) ===
-1. Create a new MIDI track: Name "[GHOST] Kick Trigger", Color dark grey, Mute = True
+1. Create a new MIDI track: Name "[GHOST] Kick Trigger", Color dark gray, Mute = True
 2. Load Drum Rack with TR-808 Kit (same as Kick track)
 3. Create clip in Scene 1, 2 bars, with Note 36 on every quarter note
    (Beat 1.1, 2.1, 3.1, 4.1 per bar), Velocity 100, Duration 0.25

@@ -1,5 +1,7 @@
 # Safety: what the assistant may do in Live, and how to take it back
 
+**English** · [Deutsch](SAFETY.de.md)
+
 The rules are enforced by the code, not only stated in tool descriptions.
 Tested in Live 12.3.6, see [LIVE_TEST_PROTOCOL.md](LIVE_TEST_PROTOCOL.md).
 
@@ -105,12 +107,12 @@ How a step can be taken back is shown as its undo kind:
 
 | Kind | Steps | Taking it back |
 |---|---|---|
-| `exact` | tempo, track name / fader / mute / colour / send, return fader, clip name, clip gain, scene tempo, loop brace, EQ Eight mode, device parameters, sidechain routing, warp mode, warp markers, MIDI notes (add, replace, delete, humanize, transpose), new track, new clip, loaded device (if nothing was replaced), new arrangement audio clip, locator created / deleted / cleared / rebuilt | `undo_ai_change(n)` restores the previous state |
+| `exact` | tempo, track name / fader / mute / color / send, return fader, clip name, clip gain, scene tempo, loop brace, EQ Eight mode, device parameters, sidechain routing, warp mode, warp markers, MIDI notes (add, replace, delete, humanize, transpose), new track, new clip, loaded device (if nothing was replaced), new arrangement audio clip, locator created / deleted / cleared / rebuilt | `undo_ai_change(n)` restores the previous state |
 | `live_undo` | deleted track, deleted device, loading an instrument that replaced another one, warp repair on several clips, grouping (Ctrl+G) | only Live's own undo, while it is the most recent step |
 | `none` | Live undo / redo, tempo follower, saving, `.als` file edits (those have their file backup) | recorded for the record only |
 
 Transport and view actions (play, stop, launch, jump, record arm, switching views) leave
-the Set as it is and are not journalled.
+the Set as it is and are not journaled.
 
 The restore information lives in Live's memory, attached to the tracks, clips and
 parameters themselves, not to their index. It stays correct when tracks are inserted
@@ -120,7 +122,7 @@ back; older ones keep their text.
 ## 5. What this does not cover
 
 - **Other clients.** A program that opens a socket to the bridge is bound by the
-  confirmation rule for destructive commands and is journalled like the MCP server,
+  confirmation rule for destructive commands and is journaled like the MCP server,
   but it can send `"confirm": true` itself. The bridge listens on the loopback
   address only.
 - **`ABLETON_MCP_CONFIRM=0`** in Live's environment switches the bridge-side

@@ -1,5 +1,7 @@
 # Y Meter (Max for Live)
 
+**English** · [Deutsch](README.de.md)
+
 A small audio effect that measures the track it sits on and sends the numbers to the
 MCP server, so the assistant can see levels and the spectrum per track while the song
 plays.
