@@ -92,6 +92,13 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   Antwort sagt `[changed_since]`. Die Prüfung vergleicht den aktuellen Zustand mit dem, was
   der Schritt hinterlassen hat.
 - Ein Schritt lässt sich einmal zurücknehmen.
+- **Späte Antworten.** Antwortet Live nicht rechtzeitig (ein Dialog ist offen, Live ist
+  beschäftigt), hatte einen Schritt aber schon begonnen, läuft dieser Schritt zu Ende,
+  und die Änderung bekommt trotzdem ihren Eintrag; die Zeitüberschreitung sagt das, und
+  `list_ai_changes` zeigt die Nummer. Weitere Schritte desselben Befehls entfallen.
+  Einen Schritt, den Live noch nicht begonnen hatte, verwirft die Bridge; er ändert nichts.
+- Lässt sich die Journal-Datei nicht schreiben, bleibt das Journal im Speicher
+  vollständig, und `list_ai_changes` warnt, wie viele Zeilen in der Datei fehlen.
 - Das Journal gehört zu einem Lauf des Remote Scripts in Live. Die Nummern beginnen bei 1,
   wenn Live das Script startet, und laufen über Hot Reloads und Neustarts des MCP-Servers
   weiter. (Live startet das Script normalerweise neu, wenn ein anderes Set geladen wird;
@@ -130,7 +137,8 @@ lassen sich zurücknehmen; ältere behalten ihren Text.
   Lautsprecher mit einem Limiter am Ende des Abhörwegs.
 - **Dateien.** Die `.als`-Tools schreiben dorthin, wohin man sie schickt; ihr Schutz sind
   die Bestätigung und die Sicherungskopie.
-- **`eval_code`** bleibt abgeschaltet, solange `allow_eval.flag` nicht neben dem
-  installierten Script liegt, und ist obendrein destruktiv.
+- **`eval_code`** bleibt abgeschaltet, solange weder `allow_eval.flag` neben dem
+  installierten Script liegt noch Live mit der Umgebungsvariable
+  `ABLETON_MCP_ALLOW_EVAL=1` läuft, und ist obendrein destruktiv.
 - Es ist kein manipulationssicheres Prüfprotokoll: Die Journal-Datei ist eine einfache
   Textdatei.

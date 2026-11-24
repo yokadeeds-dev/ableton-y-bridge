@@ -36,7 +36,11 @@ ACTIVE, UNDONE = "active", "undone"
 CHANGED_SINCE = "changed_since"
 KEEP_RESTORABLE = 400  # older entries keep their text but lose the restore function
 
-_lock = threading.Lock()
+def _lock_of(hub):
+    """The journal's lock. It lives in hub.state next to the book: a hot reload
+    replaces this module, and two module-level locks for one book could hand
+    out the same number twice."""
+    return hub.state.setdefault("journal_lock", threading.Lock())
 
 
 def _book(hub):
@@ -48,6 +52,7 @@ def _book(hub):
             "order": [],
             "file": None,
             "file_failed": False,
+            "file_error": None,
             "started": time.time(),
         }
     return book
@@ -61,7 +66,7 @@ def _safe_name(text):
 def prepare(hub, song):
     """Decide where this session's journal file goes. Main thread only."""
     book = _book(hub)
-    if book["file"] is not None or book["file_failed"]:
+    if book["file"] is not None or book.get("file_failed"):
         return
     root = settings.journal_dir()
     if not root:
@@ -77,15 +82,19 @@ def prepare(hub, song):
 
 
 def _append_to_file(book, record):
+    """Write one line to the journal file. A failure never breaks a command; it
+    is kept in ``file_error`` (shown by status and listing) and the next entry
+    tries again. Lines that could not be written are counted, not kept."""
     path = book.get("file")
-    if not path or book.get("file_failed"):
+    if not path:
         return
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-    except OSError:
-        book["file_failed"] = True  # journalling to disk must never break a command
+    except OSError as problem:
+        book["file_error"] = "%s: %s" % (type(problem).__name__, problem)
+        book["file_lost"] = book.get("file_lost", 0) + 1
 
 
 def compact(params, limit=160):
@@ -117,7 +126,7 @@ def add(hub, command, params, text, undo=None, valid=None, kind=None):
     """Append an entry and return its public form."""
     if kind is None:
         kind = EXACT if undo is not None else LIVE_UNDO
-    with _lock:
+    with _lock_of(hub):
         book = _book(hub)
         number = book["next"]
         book["next"] = number + 1
@@ -146,21 +155,32 @@ def add(hub, command, params, text, undo=None, valid=None, kind=None):
 
 
 def listing(hub, limit=30, only_active=False):
-    with _lock:
+    with _lock_of(hub):
         book = _book(hub)
         numbers = list(book["order"])
         entries = [public(book["entries"][n]) for n in numbers]
         path, total = book.get("file"), len(numbers)
+        trouble = _file_trouble(book)
     if only_active:
         entries = [e for e in entries if e["state"] == ACTIVE]
     if limit and limit > 0:
         entries = entries[-limit:]
-    return {"count": total, "shown": len(entries), "entries": entries,
-            "journal_file": None if not path else path}
+    answer = {"count": total, "shown": len(entries), "entries": entries,
+              "journal_file": None if not path else path}
+    answer.update(trouble)
+    return answer
+
+
+def _file_trouble(book):
+    """What went wrong with the journal file, if anything (empty if nothing)."""
+    if not book.get("file_lost"):
+        return {}
+    return {"journal_file_error": book.get("file_error"),
+            "journal_file_lines_lost": book["file_lost"]}
 
 
 def status(hub):
-    with _lock:
+    with _lock_of(hub):
         book = _book(hub)
         entries = list(book["entries"].values())
         return {
@@ -170,6 +190,7 @@ def status(hub):
             "journal_file": book.get("file"),
             "session_started": time.strftime("%Y-%m-%d %H:%M:%S",
                                              time.localtime(book["started"])),
+            **_file_trouble(book),
         }
 
 
@@ -182,7 +203,7 @@ def _after(outcome, then):
 
 def undo(hub, number):
     """Take back entry ``number``. Main thread only; may span several ticks."""
-    with _lock:
+    with _lock_of(hub):
         entry = _book(hub)["entries"].get(number)
     if entry is None:
         raise CommandError(NOT_FOUND, "there is no journal entry #%s" % number)
@@ -203,7 +224,7 @@ def undo(hub, number):
             )
 
     def done(detail):
-        with _lock:
+        with _lock_of(hub):
             entry["state"] = UNDONE
             _append_to_file(_book(hub), {"undone": number, "at": time.time()})
         answer = {"undone": number, "text": entry["text"]}

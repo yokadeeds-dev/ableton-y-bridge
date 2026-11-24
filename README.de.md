@@ -174,7 +174,8 @@ Einzelheiten, die Liste dessen, was sich zurücknehmen lässt, und die Grenzen v
   zwischendurch nicht aus Live.
 - **`eval_code`** (einen Python-Ausdruck in Live ausführen) gibt es als Bridge-Befehl für
   die Entwicklung; er ist abgeschaltet, solange du nicht die Datei `allow_eval.flag` neben
-  dem installierten Script anlegst.
+  dem installierten Script anlegst oder Live mit der Umgebungsvariable
+  `ABLETON_MCP_ALLOW_EVAL=1` startest.
 - Die Bridge lauscht nur auf der Loopback-Adresse. Alles, was eine lokale TCP-Verbindung
   öffnen kann, kann Befehle senden, wie bei anderen Remote-Script-Bridges auch.
 

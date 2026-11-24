@@ -25,6 +25,7 @@ logger = logging.getLogger("dashboard")
 UDP_PORT = 7878
 WS_PORT  = 8766   # WebSocket
 HTTP_PORT = 8765  # Browser
+HOST = '127.0.0.1'  # this computer only: page, WebSocket and UDP input are not for the network
 
 # ─── Shared State ────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ def _udp_reader():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.settimeout(1.0)
     try:
-        sock.bind(('', UDP_PORT))
+        sock.bind((HOST, UDP_PORT))
         logger.info(f"UDP reader on :{UDP_PORT}")
     except OSError as e:
         logger.error(f"UDP bind failed: {e}")
@@ -141,7 +142,7 @@ async def _broadcaster():
 
 
 async def _run_ws_server():
-    server = await asyncio.start_server(_ws_handler, '0.0.0.0', WS_PORT)
+    server = await asyncio.start_server(_ws_handler, HOST, WS_PORT)
     logger.info(f"WebSocket server on ws://localhost:{WS_PORT}")
     async with server:
         await asyncio.gather(server.serve_forever(), _broadcaster())
@@ -260,7 +261,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
 
 
 def _run_http():
-    httpd = HTTPServer(('0.0.0.0', HTTP_PORT), _DashboardHandler)
+    httpd = HTTPServer((HOST, HTTP_PORT), _DashboardHandler)
     logger.info(f"Dashboard: http://localhost:{HTTP_PORT}")
     httpd.serve_forever()
 

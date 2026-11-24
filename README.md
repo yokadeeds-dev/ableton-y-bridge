@@ -167,7 +167,8 @@ Details, the list of what can be taken back, and the limits of all this:
   in Live to see the change, and do not save from Live in between.
 - **`eval_code`** (run a Python expression inside Live) exists as a bridge command for
   development and is switched off unless you create the file `allow_eval.flag` next to
-  the installed script.
+  the installed script or start Live with the environment variable
+  `ABLETON_MCP_ALLOW_EVAL=1`.
 - The bridge listens on the loopback address only. Anything that can open a local TCP
   connection can send commands, as with other Remote Script bridges.
 

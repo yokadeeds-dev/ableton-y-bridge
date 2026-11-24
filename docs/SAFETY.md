@@ -93,6 +93,13 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   `[changed_since]`. The check compares the current state with what the step left
   behind.
 - A step can be taken back once.
+- **Late answers.** If Live does not answer in time (a dialog is open, Live is busy)
+  but had already started a step, that step still runs to its end and the change still
+  gets its entry; the timeout error says so, and `list_ai_changes` shows the number.
+  Further steps of the same command are dropped. A step Live had not started yet is
+  dropped and changes nothing.
+- If the journal file cannot be written, the journal in memory stays complete and
+  `list_ai_changes` warns how many lines are missing from the file.
 - The journal belongs to one run of the Remote Script inside Live. Numbers start at 1
   when Live starts the script and continue across hot reloads and across restarts of
   the MCP server. (Live normally starts the script anew when another Set is loaded;
@@ -132,7 +139,8 @@ back; older ones keep their text.
 - **Files.** The `.als` tools write where they are told to; their protection is the
   confirmation and the backup copy.
 - **`eval_code`** stays switched off unless `allow_eval.flag` exists next to the
-  installed script, and it is destructive on top of that.
+  installed script or Live runs with the environment variable
+  `ABLETON_MCP_ALLOW_EVAL=1`, and it is destructive on top of that.
 - It is not a tamper-proof audit log: the journal file is a plain text file.
 - **Untitled Sets.** Changes are allowed in a Set that has no file yet, but the
   journal's undo lives only in memory and there is no saved state to fall back on.

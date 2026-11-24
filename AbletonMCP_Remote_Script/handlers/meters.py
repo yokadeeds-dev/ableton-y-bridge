@@ -21,6 +21,7 @@ from ..liveaccess import peek
 from ..registry import READ, Bool, Float, Later, command, ticker
 
 MAX_SECONDS = 10.0
+COMMAND_TIMEOUT_S = 15.0
 
 # Live's meter scale is linear in dB: dBFS = 76 * meter - 70 (the formula
 # Faderhand uses). Checked in Live 12.3.6 with 1 kHz sine files of known peak
@@ -86,10 +87,24 @@ def transport_tick(live):
 
 
 def sample_tick(live):
-    """Ticker: one reading for every running measurement, on every display tick."""
+    """Ticker: one reading for every running measurement, on every display tick.
+
+    A measurement whose command timed out never collects its result, so every
+    session carries a deadline and is dropped after it; a session that fails
+    is dropped alone instead of stopping the ticker for all of them.
+    """
     sessions = live.state.get(_KEY) or {}
-    for session in list(sessions.values()):
-        session()
+    now = time.time()
+    for key, session in list(sessions.items()):
+        sample, deadline = session if isinstance(session, tuple) else (session, None)
+        if deadline is not None and now > deadline:
+            sessions.pop(key, None)
+            continue
+        try:
+            sample()
+        except Exception as problem:
+            sessions.pop(key, None)
+            live.log("meter session %s dropped: %s" % (key, problem))
     if not sessions:
         live.state.get("tickers", {}).pop(_KEY, None)
 
@@ -105,7 +120,7 @@ def _targets(song, include_returns):
 @command("get_track_meters", zone=READ,
          summary="Sample the output meters of all tracks, return tracks and the master",
          params=[Float("seconds", 2.0), Bool("include_returns", True)],
-         timeout=15.0)
+         timeout=COMMAND_TIMEOUT_S)
 def get_track_meters(live, seconds, include_returns):
     seconds = min(max(float(seconds), 0.0), MAX_SECONDS)
     song = live.song
@@ -187,7 +202,9 @@ def get_track_meters(live, seconds, include_returns):
     # ten a second); a deferred result only gets a turn every second tick.
     sessions = live.state.setdefault(_KEY, {})
     key = "%d-%f" % (id(stats_by), started)
-    sessions[key] = sample
+    # Kept until the result is collected, at the latest until the command's
+    # timeout is over (then nobody will collect it).
+    sessions[key] = (sample, started + seconds + COMMAND_TIMEOUT_S + 1.0)
     live.state.setdefault("tickers", {})[_KEY] = ("handlers.meters", "sample_tick")
     sample()
 

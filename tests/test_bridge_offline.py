@@ -396,6 +396,173 @@ class SafetyTests(BridgeCase):
             os.environ.pop("ABLETON_MCP_MAX_ZONE")
 
 
+class TimeoutAndJournalTests(BridgeCase):
+    """PTc 2026-11-24: a timeout must not lose a change; journal and meters stay sound."""
+
+    def patched(self, name, timeout, handler):
+        spec = self.surface._hub.registry.get(name)
+        kept = (spec.timeout, spec.handler)
+        spec.timeout, spec.handler = timeout, handler(spec.handler)
+        self.addCleanup(lambda: setattr(spec, "timeout", kept[0]) or setattr(spec, "handler", kept[1]))
+        return spec
+
+    def texts(self):
+        return [e["text"] for e in self.call("list_changes", limit=0)["entries"]]
+
+    def wait_for(self, check, seconds=5.0):
+        """Poll instead of fixed sleeps: a busy machine must not make tests flaky."""
+        end = time.time() + seconds
+        while time.time() < end:
+            if check():
+                return True
+            time.sleep(0.05)
+        return check()
+
+    def undo_last(self, count):
+        for entry in self.call("list_changes", limit=count)["entries"][::-1]:
+            self.call("undo_change", n=entry["n"])
+
+    def test_timeout_while_running_is_still_journaled(self):
+        """LECK 1: Live runs a started step to its end; the change gets its entry."""
+        def slow(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                return original(live, **arguments)
+            return handler
+        self.patched("set_track_name", 0.25, slow)
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="Late name")
+        self.assertEqual(caught.exception.code, "timeout")
+        self.assertTrue(self.wait_for(lambda: any("Late name" in t for t in self.texts())),
+                        self.texts()[-3:])       # the step ends, then late() journals it
+        time.sleep(0.3)                          # no second entry may follow
+        self.assertEqual(SONG.tracks[2].name, "Late name")
+        self.assertEqual(sum("Late name" in t for t in self.texts()), 1, self.texts()[-3:])
+        self.assertIn("still working on the current step", str(caught.exception))
+        self.assertTrue(caught.exception.details.get("still_running"))
+        self.undo_last(1)
+        self.assertNotEqual(SONG.tracks[2].name, "Late name")
+
+    def test_timeout_between_steps_journals_the_steps_that_ran(self):
+        """LECK 1: a later step is dropped, the earlier one did change the Set."""
+        hub_module = sys.modules[type(self.surface._hub).__module__]
+
+        def chained(original):
+            def handler(live, **arguments):
+                original(live, **arguments)      # step 1 changes the name at once
+                return hub_module.Later(lambda: {"never": True}, 2000)  # step 2 waits too long
+            return handler
+        self.patched("set_track_name", 0.3, chained)
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="First step")
+        self.assertEqual(caught.exception.code, "timeout")
+        self.assertEqual(SONG.tracks[2].name, "First step")
+        self.assertTrue(any("First step" in text for text in self.texts()), self.texts()[-3:])
+        self.assertIn("Earlier steps of it did run and are journaled", str(caught.exception))
+        self.assertTrue(caught.exception.details.get("journal"))
+        self.assertNotIn("still_running", caught.exception.details)
+        self.undo_last(1)
+
+    def test_running_step_that_returns_later_drops_the_rest(self):
+        """Review MINOR 1: the late step is journaled once, its follow-up step never runs."""
+        hub_module = sys.modules[type(self.surface._hub).__module__]
+        ran = []
+
+        def slow_then_more(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                original(live, **arguments)
+                return hub_module.Later(lambda: ran.append(1) or {}, 0)
+            return handler
+        self.patched("set_track_name", 0.25, slow_then_more)
+        with self.assertRaises(LiveError) as caught:
+            self.call("set_track_name", track_index=2, name="Late chain")
+        self.assertIn("Later steps of the command, if any, are dropped", str(caught.exception))
+        self.assertTrue(self.wait_for(lambda: any("Late chain" in t for t in self.texts())))
+        time.sleep(0.3)
+        self.assertEqual(ran, [])
+        self.assertEqual(sum("Late chain" in t for t in self.texts()), 1)
+        self.undo_last(1)
+
+    def test_meter_session_ends_after_a_timeout(self):
+        """LECK 2: a measurement nobody collects stops reading; a failing one stops alone."""
+        meters = sys.modules[script.__name__ + ".handlers.meters"]
+        state = self.surface._hub.state
+        kept = getattr(meters, "COMMAND_TIMEOUT_S", 15.0)
+        meters.COMMAND_TIMEOUT_S = 0.2           # Live: 15 s
+        self.addCleanup(setattr, meters, "COMMAND_TIMEOUT_S", kept)
+        hub_module = sys.modules[type(self.surface._hub).__module__]
+
+        def stuck(original):                     # like a dialog in Live: the next step waits
+            def handler(live, **arguments):
+                first = original(live, **arguments)
+                return hub_module.Later(lambda: first, 2000)
+            return handler
+        self.patched("get_track_meters", 0.3, stuck)
+        with self.assertRaises(LiveError):
+            self.call("get_track_meters", seconds=1.0)
+        self.assertTrue(state.get("meter_sessions"))      # still reading for a while
+        time.sleep(2.6)                          # 1 s window + 0.2 s + 1 s grace
+        self.assertFalse(state.get("meter_sessions"), list(state.get("meter_sessions") or {}))
+        counted = []
+
+        def broken():
+            raise RuntimeError("gone")
+        sessions = state.setdefault("meter_sessions", {})
+        sessions["broken"] = (broken, None)
+        sessions["fine"] = (lambda: counted.append(1), time.time() + 0.5)
+        state["tickers"]["meter_sessions"] = ("handlers.meters", "sample_tick")
+        time.sleep(0.3)
+        self.assertNotIn("broken", sessions)
+        self.assertTrue(counted)                 # the other session went on
+        time.sleep(0.4)
+        self.assertNotIn("fine", sessions)
+
+    def test_journal_file_failure_is_reported(self):
+        """LECK 3: a failed write to the journal file shows in the listing."""
+        book = self.surface._hub.state["journal"] if "journal" in self.surface._hub.state else None
+        if book is None:
+            self.call("set_tempo", tempo=121)
+            book = self.surface._hub.state["journal"]
+        blocker = tempfile.NamedTemporaryFile(delete=False)
+        blocker.close()
+        kept = book["file"]
+        book["file"] = os.path.join(blocker.name, "sub", "journal.jsonl")  # a file as folder
+        try:
+            self.call("set_tempo", tempo=123)
+            listing = self.call("list_changes", limit=1)
+            self.assertGreaterEqual(listing.get("journal_file_lines_lost", 0), 1, listing)
+            self.assertTrue(listing.get("journal_file_error"))
+            self.assertIn("could not be written", safety.list_ai_changes())
+        finally:
+            book["file"] = kept
+            book.pop("file_lost", None)
+            book.pop("file_error", None)
+            os.unlink(blocker.name)
+        self.call("set_tempo", tempo=124)        # writes again once the path works
+        with open(kept, encoding="utf-8") as handle:
+            self.assertIn("124", handle.read().splitlines()[-1])
+
+    def test_journal_lock_survives_a_hot_reload(self):
+        """LECK 4: one lock for the one journal, also after a reload of its module."""
+        hub = self.surface._hub
+        self.call("set_tempo", tempo=125)
+        lock = hub.state.get("journal_lock")
+        self.assertIsNotNone(lock)
+        hub.reload()
+        before = self.call("list_changes", limit=1)["entries"][-1]["n"]
+        threads = [threading.Thread(target=self.call, args=("set_tempo",), kwargs={"tempo": 126 + i})
+                   for i in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertIs(hub.state.get("journal_lock"), lock)
+        numbers = [e["n"] for e in self.call("list_changes", limit=0)["entries"]]
+        self.assertEqual(len(numbers), len(set(numbers)))
+        self.assertGreaterEqual(numbers[-1], before + 4)
+
+
 class ToolTests(BridgeCase):
     """Every MCP tool that needs Live is called once through its wrapper."""
 

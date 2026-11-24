@@ -53,6 +53,10 @@ def list_ai_changes(limit: IntLike = 30, only_active: BoolLike = False) -> str:
     for entry in result["entries"]:
         mark = " [taken back]" if entry["state"] == "undone" else ""
         rows.append(f"#{entry['n']} {entry['time']} {entry['text']}  (undo: {entry['undo']}){mark}")
+    if result.get("journal_file_lines_lost"):
+        rows.append(f"Warning: {result['journal_file_lines_lost']} line(s) could not be written "
+                    f"to the journal file ({result.get('journal_file_error')}); the list above "
+                    "is complete, the file is not.")
     return "\n".join(rows)
 
 
