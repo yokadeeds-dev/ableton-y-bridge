@@ -41,7 +41,8 @@ JOURNAL_ENV = "ABLETON_MCP_JOURNAL_DIR"
 
 # How many journal files are kept per Set: the newest ones, the file of the
 # running session included; older ones are deleted at the first command
-# through the bridge in a Live session (D22). 0 or less keeps all.
+# through the bridge in a session, that is a run of this script: Live starts
+# it anew for every loaded Set (D22, D23). 0 or less keeps all.
 JOURNAL_KEEP_ENV = "ABLETON_MCP_JOURNAL_KEEP"
 JOURNAL_KEEP_DEFAULT = 20
 

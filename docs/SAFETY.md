@@ -109,10 +109,11 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   Set before can no longer be taken back with `undo_ai_change`.
 - The text of the journal is also written to
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set name>\<date_time>.jsonl`
-  (one line per step, one more line when a step is taken back), one file per Live
-  session. The 20 newest files per folder are kept, the running session's included;
-  at the first command through the bridge in a Live session, older files in that
-  folder are deleted for good. Only files named like the journal writes them are
+  (one line per step, one more line when a step is taken back), one file per session.
+  A session is one run of the Remote Script: it starts when Live starts the script and
+  again whenever another Set is loaded. The 20 newest files per folder are kept, the
+  running session's included; at the first command through the bridge in a session,
+  older files in that folder are deleted for good. Only files named like the journal writes them are
   touched. `ABLETON_MCP_JOURNAL_KEEP` in Live's environment sets the number, 0 keeps
   all. `get_safety_status` reports how many files were deleted
   (`old_journal_files_deleted`) and a cleanup problem (`journal_cleanup_error`).
@@ -122,8 +123,9 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
   All untitled Sets share `_untitled`, and Sets with the same name (or names that only
   differ in characters not allowed in file names) share a folder and its 20 places.
   A Set saved under a new name during a session keeps writing to the old folder until
-  the session ends; so does an untitled Set saved for the first time (`_untitled`). "Newest" goes by the start time in the file name; a clock set back
-  can upset the order.
+  the session ends; so does an untitled Set saved for the first time (`_untitled`).
+  "Newest" goes by the start time in the file name; a clock set back can upset the
+  order.
 
 How a step can be taken back is shown as its undo kind:
 

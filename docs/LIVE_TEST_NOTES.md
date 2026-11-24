@@ -222,7 +222,10 @@ bridge's status, no command that changes the Set.
 | Check | Verdict | Seen |
 |---|---|---|
 | Live starts the script anew when a Set is loaded | pass | `bridge going down`, then `bridge 2.2.0 up` right after each `Loading document` at 18:00:53 (new Set from the template), 18:01:00 and 18:05:50 |
+| `Song.name` is the file name without `.als` (PTc F2) | pass | `get_session_info`: `set_name` "v2 Wegwerf.alv2 Wegwerf Live12", `set_path` ends in `v2 Wegwerf.alv2 Wegwerf Live12.als` (the file name itself is that odd) |
 | journal session ends with the Set | pass | `get_safety_status`: `session_started` 18:06:25 and a file in the folder of the Set loaded at 18:05:50, 0 entries |
+| saving an untitled Set does not start the script anew | pass | new Set from the template at 18:43:50 (`bridge going down`, `up` 18:43:51); Yoka saved it as `asd.als`; up to 18:45 no further `going down`/`up` in `Log.txt` |
+| journal folder after that save | pass | no command ran before the save, so the first one (18:45:15) set the folder `asd`; `session_started` is the time of that first command |
 
 The journal, single-step undo and the untitled notice live in the hub's state,
 and each start of the script makes a new hub. So all three begin anew with

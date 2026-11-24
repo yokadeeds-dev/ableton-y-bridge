@@ -1489,6 +1489,46 @@ class JournalCleanupTests(unittest.TestCase):
         self.assertEqual(len(self.stamped(folder)), 19)
 
 
+class ToolConcurrencyTests(unittest.TestCase):
+    """PTc F1 / LECK E: the per-call fields in core.py need sync tools that
+    FastMCP runs on its event loop thread, one after the other."""
+
+    def test_async_tool_is_refused(self):
+        async def probe_async_tool():
+            return "never"
+        async def probe_async_generator_tool():
+            yield "never"
+        for function in (probe_async_tool, probe_async_generator_tool):
+            with self.assertRaises(TypeError):
+                core.tool()(function)
+            self.assertNotIn(function.__name__, core.TOOLS)
+
+    def test_sync_tools_run_on_the_event_loop_thread(self):
+        import asyncio
+        import threading
+        seen = {}
+
+        def probe_thread_tool():
+            """Test only."""
+            seen["tool"] = threading.get_ident()
+            return "ok"
+        from mcp.types import CallToolRequest, CallToolRequestParams
+        core.tool()(probe_thread_tool)
+        self.addCleanup(core.TOOLS.pop, "probe_thread_tool", None)
+        remove = getattr(core.mcp, "remove_tool", None)   # not in every mcp >= 1.8
+        self.addCleanup(remove or core.mcp._tool_manager._tools.pop, "probe_thread_tool")
+        # the handler the MCP server itself runs for tools/call, not only FastMCP
+        handler = core.mcp._mcp_server.request_handlers[CallToolRequest]
+        request = CallToolRequest(method="tools/call", params=CallToolRequestParams(
+            name="probe_thread_tool", arguments={}))
+
+        async def main():
+            seen["loop"] = threading.get_ident()
+            await handler(request)
+        asyncio.run(main())
+        self.assertEqual(seen.get("tool"), seen["loop"])
+
+
 class AnalyzerFeedTests(unittest.TestCase):
     def test_json_master_frame(self):
         from MCP_Server.analyzer_feed import AnalyzerFeed

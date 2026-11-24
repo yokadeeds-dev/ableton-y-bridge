@@ -236,6 +236,15 @@ def tool(zone: str = READ, unless: Callable = None) -> Callable:
 
     def register(function: Callable) -> Callable:
         name = function.__name__
+        # _guarded hands each call's journal, results, notices and confirm flag
+        # over in module-wide fields of `live`. That is safe only because FastMCP
+        # runs plain (sync) tools one at a time on its event loop thread, with no
+        # await in between (PTc F1, LECK E). An async tool, or an mcp version that
+        # moves sync tools into worker threads, would let two calls mix them up;
+        # ToolConcurrencyTests checks both; pyproject.toml caps mcp below 2 so a
+        # major update is taken on purpose and runs these tests first.
+        if inspect.iscoroutinefunction(function) or inspect.isasyncgenfunction(function):
+            raise TypeError(f"{name}: tools must be plain functions, not async")
         writes = zone != READ
         signature = inspect.signature(function, eval_str=True)
         params = list(signature.parameters)

@@ -125,8 +125,8 @@ nicht.
   `{"ok": false, "error": ..., "code": ...}`. Ohne den Schalter bleibt die Antwort Text.
 - **Unbenannte Sets.** Die erste Änderung in einem Set, das noch keine Datei hat, trägt
   einen Hinweis (`Note: This Set has no file yet. ...`, in JSON das Feld `notice`): Die
-  Schritte lassen sich einzeln zurücknehmen, solange Live läuft, aber nicht nach einem
-  Absturz oder Neustart, und es gibt keinen gespeicherten Stand zum Zurückgehen. Der
+  Schritte lassen sich einzeln zurücknehmen, bis Live beendet oder ein anderes Set geladen
+  wird, aber nicht nach einem Absturz oder Neustart, und es gibt keinen gespeicherten Stand zum Zurückgehen. Der
   Assistent wird gebeten, vorher das Speichern vorzuschlagen.
 - **Einzel-Undo.** `undo_ai_change(12)` nimmt genau Schritt 12 zurück und lässt alle
   anderen Schritte stehen. Hast du dasselbe inzwischen in Live geändert, bleibt deine
@@ -143,7 +143,8 @@ Einzelheiten, die Liste dessen, was sich zurücknehmen lässt, und die Grenzen v
   speichern noch Spuren gruppieren. `snapshot_session` und `group_tracks` holen Lives
   Fenster nach vorn und tippen Strg+S / Strg+G. Sie tippen nicht, wenn Live nicht vorn ist
   oder einen Dialog zeigt, und sagen das. Nur Windows.
-- **Journal-Dateien** landen in `%USERPROFILE%\.ableton-y-bridge\journals`.
+- **Journal-Dateien** landen in `%USERPROFILE%\.ableton-y-bridge\journals`; je Set
+  bleiben die 20 neuesten, ältere werden endgültig gelöscht (siehe `docs/SAFETY.de.md`).
 - **Speichern braucht ein Set mit Datei.** Ein unbenanntes Set, ein Set außerhalb eines
   Projektordners oder eines aus einer älteren Live-Version lässt Live einen Dialog öffnen,
   statt zu speichern.

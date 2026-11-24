@@ -19,7 +19,9 @@ How an entry can be taken back is its *kind*:
 The journal lives in ``hub.state`` and so survives hot reloads. The restore
 functions hold on to Live objects (tracks, clips, parameters), not indices,
 so they stay correct when tracks are inserted or moved. They end with the
-Live session; the text of the journal is also appended to a file per session.
+session, that is the run of this script: Live starts it anew when it starts and
+for every loaded Set (D23). The text of the journal is also appended to a file
+per session.
 """
 
 import json

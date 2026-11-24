@@ -111,9 +111,10 @@ Journal: #12 Track 'Bass' fader: 0.0 dB -> -6.0 dB
 - Der Text des Journals wird außerdem nach
   `%USERPROFILE%\.ableton-y-bridge\journals\<Set-Name>\<Datum_Uhrzeit>.jsonl` geschrieben
   (eine Zeile je Schritt, eine weitere, wenn ein Schritt zurückgenommen wird), eine Datei je
-  Live-Sitzung. Je Ordner bleiben die 20 neuesten Dateien, die der laufenden Sitzung
-  mitgezählt; beim ersten Befehl über die Bridge in einer Live-Sitzung werden ältere
-  Dateien in diesem Ordner endgültig gelöscht. Nur Dateien, die so heißen, wie das Journal
+  Sitzung. Eine Sitzung ist ein Lauf des Remote Scripts: Sie beginnt, wenn Live das Script
+  startet, und neu, sobald ein anderes Set geladen wird. Je Ordner bleiben die 20 neuesten
+  Dateien, die der laufenden Sitzung mitgezählt; beim ersten Befehl über die Bridge in einer
+  Sitzung werden ältere Dateien in diesem Ordner endgültig gelöscht. Nur Dateien, die so heißen, wie das Journal
   sie anlegt, sind betroffen. `ABLETON_MCP_JOURNAL_KEEP` in Lives Umgebung setzt die Zahl,
   0 behält alle. `get_safety_status` meldet, wie viele Dateien gelöscht wurden
   (`old_journal_files_deleted`), und ein Problem beim Aufräumen (`journal_cleanup_error`).

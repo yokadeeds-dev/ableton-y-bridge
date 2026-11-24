@@ -121,8 +121,8 @@ variables; see [.env.example](.env.example). No keys or accounts are needed.
   `{"ok": false, "error": ..., "code": ...}`. Without the switch the answer stays text.
 - **Untitled Sets.** The first change in a Set that has no file yet carries a note
   (`Note: This Set has no file yet. ...`, in JSON the field `notice`): the steps can be
-  taken back one by one while Live runs, but not after a crash or restart, and there is
-  no saved state to go back to. The assistant is asked to suggest saving first.
+  taken back one by one until Live quits or another Set is loaded, but not after a crash
+  or restart, and there is no saved state to go back to. The assistant is asked to suggest saving first.
 - **Single-step undo.** `undo_ai_change(12)` takes back exactly step 12 and leaves
   every other step alone. If you changed the same thing in Live since, your setting
   stays and the tool says so.
@@ -138,7 +138,8 @@ Details, the list of what can be taken back, and the limits of all this:
   `snapshot_session` and `group_tracks` bring Live's window to the front and type
   Ctrl+S / Ctrl+G. They refuse to type when Live is not in front or shows a dialog, and
   they say so. Windows only.
-- **Journal files** are written to `%USERPROFILE%\.ableton-y-bridge\journals`.
+- **Journal files** are written to `%USERPROFILE%\.ableton-y-bridge\journals`; per Set
+  the 20 newest are kept and older ones deleted for good (see `docs/SAFETY.md`).
 - **Saving needs a Set that has a file.** An untitled Set, a Set outside a Project folder
   or one made by an older Live version makes Live open a dialog instead of saving.
 - **Locators** can only be created or deleted while the transport is stopped
