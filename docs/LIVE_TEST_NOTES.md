@@ -198,6 +198,22 @@ taken back.
 The notice comes with the first change only, and again in the new Set after
 the changes in the saved one.
 
+## Timeout path in Live (PTc LECK 1), 2026-11-24 14:59
+
+Live 12.3.6, Set "test fh", Remote Script installed from `0d04d14` and Live
+restarted (`core_changed_since_start: false`, 88 commands).
+With the dialog File > Save Live Set As open, `set_track_name(3, "Timeout-Test")`
+was called to provoke a timeout of a step Live had not started yet.
+
+| Check | Verdict | Seen |
+|---|---|---|
+| dialog holds the step back until the timeout | not reached | the rename ran at once (`#1`); this dialog does not stop the Remote Script in Live 12.3.6 |
+| journal of the step, single-step undo | pass | `#1 ... (undo: exact)`, `undo_ai_change(1)` took it back |
+
+No dialog that stops the Remote Script was found, and `eval_code` is off, so
+neither timeout path (step not started, step still running) could be provoked
+in Live. Both rest on the offline tests (`TimeoutAndJournalTests`).
+
 ## Not tested
 
 - **macOS**, and any Live version other than 12.3.6.

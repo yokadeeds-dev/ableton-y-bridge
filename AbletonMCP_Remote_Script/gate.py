@@ -38,6 +38,7 @@ class MainThreadGate(object):
         self._home = None
         self._open = True
         self._tick = 0
+        self.late_failures = 0  # late() callbacks that raised; bridge_status shows it
 
     def adopt_current_thread(self):
         """Declare the calling thread to be Live's main thread."""
@@ -126,7 +127,7 @@ class MainThreadGate(object):
                 except Exception:
                     # the caller is gone; late() logs its own trouble, this only
                     # keeps the main thread going
-                    self.late_failures = getattr(self, "late_failures", 0) + 1
+                    self.late_failures += 1
         if held_back:
             with self._lock:
                 self._jobs.extendleft(reversed(held_back))

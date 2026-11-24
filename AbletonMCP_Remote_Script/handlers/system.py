@@ -40,6 +40,7 @@ def get_version(live):
         "uptime_s": int(time.time() - hub.started_at),
         "requests_served": hub.served,
         "requests_failed": hub.failed,
+        "late_failures": getattr(hub.gate, "late_failures", 0),  # an older gate has none
         "clients": listener.client_count() if listener is not None else None,
         "eval_enabled": settings.eval_allowed(),
         "live_version": _live_version(live),

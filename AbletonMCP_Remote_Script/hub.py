@@ -9,7 +9,7 @@ import traceback
 
 from . import reloader
 from .errors import BAD_PARAMS, INTERNAL, TIMEOUT, CommandError
-from .registry import Later
+from .registry import READ, Later
 
 
 class Hub(object):
@@ -149,8 +149,9 @@ class Hub(object):
         the journal entry (single-step undo depends on it)."""
         if problem.details.get("still_running"):
             # the gate calls late() once the step is over; it journals then
-            problem.message += (". Later steps of the command, if any, are dropped. "
-                                "The change is journaled then: list_ai_changes shows it.")
+            problem.message += ". Later steps of the command, if any, are dropped."
+            if spec.zone != READ and getattr(spec, "journal", True):
+                problem.message += " The change is journaled then: list_ai_changes shows it."
         elif used:
             # an earlier step of the command ran, a later one was dropped
             entries = self._journal_anyway(used, spec, arguments)

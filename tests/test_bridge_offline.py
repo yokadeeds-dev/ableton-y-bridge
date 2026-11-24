@@ -386,6 +386,9 @@ class SafetyTests(BridgeCase):
         status = json.loads(safety.get_safety_status())
         self.assertIn("delete_device", status["destructive_tools_need_confirm"])
         self.assertTrue(status["bridge"]["confirm_required_for_destructive"])
+        # the journal summary of a read is no list of journal steps
+        self.assertNotIn("journal", status, status.get("journal"))
+        self.assertIn("entries", status["bridge"]["journal"])
 
     def test_zone_limit(self):
         os.environ["ABLETON_MCP_MAX_ZONE"] = "read"
@@ -477,12 +480,79 @@ class TimeoutAndJournalTests(BridgeCase):
         self.patched("set_track_name", 0.25, slow_then_more)
         with self.assertRaises(LiveError) as caught:
             self.call("set_track_name", track_index=2, name="Late chain")
-        self.assertIn("Later steps of the command, if any, are dropped", str(caught.exception))
         self.assertTrue(self.wait_for(lambda: any("Late chain" in t for t in self.texts())))
         time.sleep(0.3)
         self.assertEqual(ran, [])
         self.assertEqual(sum("Late chain" in t for t in self.texts()), 1)
         self.undo_last(1)
+        self.assertIn("Later steps of the command, if any, are dropped", str(caught.exception))
+
+    def test_trouble_in_late_is_logged_and_live_goes_on(self):
+        """Delta review MINOR 3: late() logs its own failure; the gate keeps working."""
+        hub = self.surface._hub
+        hub_module = sys.modules[type(hub).__module__]
+
+        def slow_then_more(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                original(live, **arguments)
+                return hub_module.Later(lambda: {}, 0)
+            return handler
+
+        def failing(*_args):
+            raise RuntimeError("journal gone")
+        hub._journal_anyway = failing
+        self.addCleanup(delattr, hub, "_journal_anyway")
+        self.patched("set_track_name", 0.25, slow_then_more)
+        log = self.surface.log
+        start = len(log)
+        failures = self.call("get_version")["late_failures"]
+        with self.assertRaises(LiveError):
+            self.call("set_track_name", track_index=2, name="Late trouble")
+        self.assertTrue(self.wait_for(
+            lambda: any("late journal for set_track_name failed" in l for l in log[start:])),
+            log[start:])
+        self.assertTrue(any("timed out; its later steps are dropped" in l for l in log[start:]))
+        self.assertEqual(self.call("get_version")["late_failures"], failures)  # late() caught it
+        self.assertEqual(self.call("get_session_info")["tempo"] > 0, True)  # drain goes on
+        SONG.tracks[2].name = "Keys"
+
+    def test_read_command_timeout_promises_no_journal(self):
+        """Delta review MINOR 1: a read that times out makes no journal promise."""
+        def slow(original):
+            def handler(live, **arguments):
+                time.sleep(0.6)                  # longer than the timeout below
+                return original(live, **arguments)
+            return handler
+        self.patched("get_session_info", 0.25, slow)
+        with self.assertRaises(LiveError) as caught:
+            self.call("get_session_info")
+        time.sleep(0.6)                          # let the step end before the next test
+        self.assertIn("still working on the current step", str(caught.exception))
+        self.assertNotIn("journaled", str(caught.exception))
+
+    def test_failing_late_callback_is_counted(self):
+        """Delta review MINOR 2: bridge_status shows late() callbacks that raised."""
+        gate = self.surface._hub.gate
+        before = self.call("get_version")["late_failures"]
+
+        def boom(_job):
+            raise RuntimeError("late trouble")
+        caught = []
+
+        def client():                            # a socket thread, not Live's main thread
+            try:
+                gate.call(lambda: time.sleep(1.0), 0.3, late=boom)
+            except Exception as problem:
+                caught.append(problem)
+        worker = threading.Thread(target=client)
+        worker.start()
+        worker.join(5)
+        self.assertTrue(caught and getattr(caught[0], "code", None) == "timeout", caught)
+        self.assertTrue(caught[0].details.get("still_running"),
+                        "the job had not started yet: late() is never called")
+        self.assertTrue(self.wait_for(
+            lambda: self.call("get_version")["late_failures"] == before + 1))
 
     def test_meter_session_ends_after_a_timeout(self):
         """LECK 2: a measurement nobody collects stops reading; a failing one stops alone."""
@@ -502,8 +572,8 @@ class TimeoutAndJournalTests(BridgeCase):
         with self.assertRaises(LiveError):
             self.call("get_track_meters", seconds=1.0)
         self.assertTrue(state.get("meter_sessions"))      # still reading for a while
-        time.sleep(2.6)                          # 1 s window + 0.2 s + 1 s grace
-        self.assertFalse(state.get("meter_sessions"), list(state.get("meter_sessions") or {}))
+        self.assertTrue(self.wait_for(lambda: not state.get("meter_sessions"), 8.0),
+                        list(state.get("meter_sessions") or {}))  # 1 s + 0.2 s + 1 s grace
         counted = []
 
         def broken():
@@ -512,11 +582,9 @@ class TimeoutAndJournalTests(BridgeCase):
         sessions["broken"] = (broken, None)
         sessions["fine"] = (lambda: counted.append(1), time.time() + 0.5)
         state["tickers"]["meter_sessions"] = ("handlers.meters", "sample_tick")
-        time.sleep(0.3)
-        self.assertNotIn("broken", sessions)
+        self.assertTrue(self.wait_for(lambda: "broken" not in sessions and counted))
         self.assertTrue(counted)                 # the other session went on
-        time.sleep(0.4)
-        self.assertNotIn("fine", sessions)
+        self.assertTrue(self.wait_for(lambda: "fine" not in sessions))
 
     def test_journal_file_failure_is_reported(self):
         """LECK 3: a failed write to the journal file shows in the listing."""

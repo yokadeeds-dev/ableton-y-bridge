@@ -113,8 +113,10 @@ class LiveLink:
                 reply.get("details"),
             )
         result = reply.get("result", {})
-        if self.journal is not None and isinstance(result, dict):
-            self.journal.extend(result.get("journal") or [])
+        # journal steps come as a list; a status reply has a summary dict there
+        if (self.journal is not None and isinstance(result, dict)
+                and isinstance(result.get("journal"), list)):
+            self.journal.extend(result["journal"])
         if self.notices is not None and isinstance(result, dict) and result.get("notice"):
             self.notices.append(str(result["notice"]))
         # results of writes only: a journal note or a look-up is no read-back
