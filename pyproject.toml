@@ -28,3 +28,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["MCP_Server", "MCP_Server.tools"]
+
+# Coverage for the SonarQube scan (scripts/sonar_scan.ps1): relative paths,
+# so the scanner in its container finds the files.
+[tool.coverage.run]
+relative_files = true
+source = ["AbletonMCP_Remote_Script", "MCP_Server", "analyzer", "m4l", "scripts", "tools"]
